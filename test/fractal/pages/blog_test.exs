@@ -14,15 +14,17 @@ defmodule Fractal.Pages.BlogTest do
     assert Blog.title() == "Blog"
   end
 
-  test "renders the placeholder blog content and sample post" do
+  test "renders the blog content and sample post" do
     html =
       %{params: %{}, path: "/blog", conn: nil}
       |> Blog.render()
       |> HTML.to_safe()
       |> HTML.safe_to_string()
 
-    assert html =~ "A future home for essays"
+    assert html =~ "Essays, release notes, and field notes"
     assert html =~ "Sample post: Building with Fractal"
+    assert html =~ "What this sample shows"
+    assert html =~ "How Fractal discovers pages automatically"
     assert html =~ "July 3, 2026"
     assert html =~ ~s(href="/")
   end
