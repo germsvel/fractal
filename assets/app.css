@@ -94,3 +94,15 @@ button[type="submit"] {
 
 .flash-info { background: rgba(124, 196, 255, 0.15); border: 1px solid rgba(124, 196, 255, 0.5); }
 .flash-error { background: rgba(255, 135, 135, 0.15); border: 1px solid rgba(255, 135, 135, 0.5); }
+
+/* framework: the /fractal/components gallery (dev only) */
+.gallery-entry {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.gallery-entry h2 { font-size: 1.1rem; }
+.gallery-preview { border-top: 1px dashed rgba(255, 255, 255, 0.15); padding-top: 1rem; }
+.gallery-entry details { margin-top: 1rem; color: var(--muted); }

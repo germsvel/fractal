@@ -8,7 +8,7 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     :ok
   end
 
-  test "prints every guide" do
+  test "prints every guide and the component inventory" do
     Mix.Tasks.Fractal.Ai.Docs.run([])
 
     output = flush_output()
@@ -16,6 +16,9 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     assert output =~ "# Building pages"
     assert output =~ "guides/verification.md"
     assert output =~ "# Verification"
+    assert output =~ "component inventory"
+    assert output =~ "Fractal.Components.EmptyState"
+    assert output =~ "example assigns:"
   end
 
   @tag :tmp_dir

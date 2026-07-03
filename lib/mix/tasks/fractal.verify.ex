@@ -24,11 +24,12 @@ defmodule Mix.Tasks.Fractal.Verify do
     Mix.Task.run("compile", ["--warnings-as-errors"])
     Mix.Task.run("app.start", [])
 
-    results = [
-      Fractal.Verify.secret_key(),
-      Fractal.Verify.stylesheet(),
-      Fractal.Verify.pending_migrations() | Fractal.Verify.run()
-    ]
+    results =
+      [
+        Fractal.Verify.secret_key(),
+        Fractal.Verify.stylesheet(),
+        Fractal.Verify.pending_migrations() | Fractal.Verify.run()
+      ] ++ Fractal.Verify.run_components()
 
     Enum.each(results, fn
       {name, :ok} -> Mix.shell().info("✓ #{name}")
@@ -45,6 +46,16 @@ defmodule Mix.Tasks.Fractal.Verify do
         Mix.shell().info(
           "\nℹ unreferenced files in assets/static/ (not a failure): " <>
             Enum.join(orphans, ", ")
+        )
+    end
+
+    case Fractal.Verify.unused_components() do
+      [] ->
+        :ok
+
+      unused ->
+        Mix.shell().info(
+          "\nℹ components no page renders (not a failure): " <> Enum.join(unused, ", ")
         )
     end
 

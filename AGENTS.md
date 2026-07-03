@@ -34,6 +34,12 @@ so purely with AI — so this file is the contract for how agents work here.
   `assets/static/`, referenced only via `asset_path/1` (missing files
   fail verify). Never render `<style>` tags, never reference CDNs, and
   there is no Node/bundler — don't add one. See `guides/assets.md`.
+- **Shared markup is a component**: one render-only module in
+  `lib/fractal/components/` (render + scoped style + example), used via
+  `component(Module, assigns)`. **Check the inventory first** —
+  `/fractal/components` in dev or the end of `mix fractal.ai.docs` —
+  and prefer extending over near-duplicating. Single-page markup stays
+  a private function in the page. See `guides/components.md`.
 - **Tests drive pages through `Fractal.Test`** (`get`, `post`, `put`,
   `patch`, `delete`, `fire_event`, all with a `session:` opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
@@ -69,6 +75,7 @@ When asked to create or change a page or feature:
 | `mix fractal.gen.page Name --events a,b` | Scaffold an interactive page + tests |
 | `mix fractal.gen.page Name --style` | Scaffold a page with a scoped style/0 block |
 | `mix fractal.gen.resource Name field:type ...` | Scaffold schema + migration + form pages + tests |
+| `mix fractal.gen.component Name` | Scaffold a UI component + test (check /fractal/components first) |
 | `mix ecto.setup` / `mix ecto.migrate` | Create the database / run pending migrations |
 | `mix fractal.gen.secret` | Generate a session secret_key_base |
 | `mix fractal.verify` | Compile (warnings-as-errors) + migration check + page checks + tests |

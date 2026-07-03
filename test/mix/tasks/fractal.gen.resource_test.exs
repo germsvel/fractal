@@ -54,6 +54,7 @@ defmodule Mix.Tasks.Fractal.Gen.ResourceTest do
       assert show =~ ~s[/edit"], "show page links to the edit page"
       assert show =~ "def handle_delete(assigns) do"
       assert show =~ ~s[button_to("Delete widget"]
+      assert show =~ "component(EmptyState,", "not-found uses the shared component"
 
       edit = File.read!("lib/fractal/pages/edit_widget.ex")
       assert edit =~ ~s[path: "/widgets/:id/edit"]

@@ -38,6 +38,25 @@ defmodule Fractal.Verify do
 
   @type result :: {name :: String.t(), :ok | {:error, String.t()}}
 
+  @doc """
+  Runs all component checks against `components` (defaults to the
+  discovered ones).
+
+  Each component is smoke-rendered with its `example/0` through the
+  same scans as pages (escaping, no `<style>` tags, no external
+  references, CSRF tokens in forms), and its `style/0` is checked for
+  balance.
+  """
+  @spec run_components([module()]) :: [result()]
+  def run_components(components \\ Fractal.Component.all()) do
+    Enum.flat_map(components, fn component ->
+      [
+        {"#{inspect(component)} declares valid styles", validate_style(component)},
+        {"#{inspect(component)} renders its example", validate_component_render(component)}
+      ]
+    end)
+  end
+
   @doc "Runs all checks against `pages` (defaults to the discovered pages)."
   @spec run([module()]) :: [result()]
   def run(pages \\ Router.pages()) do
@@ -126,6 +145,25 @@ defmodule Fractal.Verify do
       |> MapSet.new()
 
     Enum.reject(Fractal.Assets.static_files(), &MapSet.member?(referenced, &1))
+  end
+
+  @doc """
+  Components no page source renders via `component/2`. Informational —
+  reported by `mix fractal.verify`, but not a failure.
+  """
+  @spec unused_components() :: [String.t()]
+  def unused_components do
+    sources =
+      "lib/**/*.ex"
+      |> Path.wildcard()
+      |> Enum.reject(&String.starts_with?(&1, "lib/fractal/components/"))
+      |> Enum.map_join("\n", &File.read!/1)
+
+    for component <- Fractal.Component.all(),
+        name = component |> Module.split() |> List.last(),
+        not String.contains?(sources, name) do
+      inspect(component)
+    end
   end
 
   @doc """
@@ -289,6 +327,22 @@ defmodule Fractal.Verify do
     exception -> {:error, "render/1 raised: #{Exception.message(exception)}"}
   end
 
+  defp validate_component_render(component) do
+    example = component.example()
+
+    if is_map(example) do
+      component
+      |> Fractal.Component.component(example)
+      |> HTML.safe_to_string()
+      |> scan_html()
+    else
+      {:error, "example/0 must return an assigns map, got: #{inspect(example)}"}
+    end
+  rescue
+    exception -> {:error, "rendering the example raised: #{Exception.message(exception)}"}
+  end
+
+  # works for pages and components alike: both optionally export style/0
   defp validate_style(page) do
     case Page.style(page) do
       nil ->

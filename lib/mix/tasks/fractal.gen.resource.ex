@@ -301,16 +301,18 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       import Fractal.Form
 
+      alias Fractal.Components.EmptyState
       alias Fractal.Repo
 
       @impl Fractal.Page
       def render(assigns) do
         case fetch(assigns.params["id"]) do
           nil ->
-            tag(:section, [], [
-              tag(:h1, [], ["#{ctx.human} not found"]),
-              tag(:p, [], [tag(:a, [href: "#{ctx.route}"], ["Back to #{ctx.plural}"])])
-            ])
+            component(EmptyState,
+              title: "#{ctx.human} not found",
+              back_href: "#{ctx.route}",
+              back_label: "Back to #{ctx.plural}"
+            )
 
           #{ctx.singular} ->
             tag(:section, [], [
@@ -365,16 +367,18 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       import Fractal.Form
 
+      alias Fractal.Components.EmptyState
       alias Fractal.Repo
 
       @impl Fractal.Page
       def render(assigns) do
         case fetch(assigns.params["id"]) do
           nil ->
-            tag(:section, [], [
-              tag(:h1, [], ["#{ctx.human} not found"]),
-              tag(:p, [], [tag(:a, [href: "#{ctx.route}"], ["Back to #{ctx.plural}"])])
-            ])
+            component(EmptyState,
+              title: "#{ctx.human} not found",
+              back_href: "#{ctx.route}",
+              back_label: "Back to #{ctx.plural}"
+            )
 
           #{ctx.singular} ->
             changeset = assigns[:changeset] || Fractal.#{ctx.camel}.changeset(#{ctx.singular}, %{})

@@ -8,16 +8,18 @@ defmodule Fractal.Pages.EditPost do
 
   import Fractal.Form
 
+  alias Fractal.Components.EmptyState
   alias Fractal.Repo
 
   @impl Fractal.Page
   def render(assigns) do
     case fetch(assigns.params["id"]) do
       nil ->
-        tag(:section, [], [
-          tag(:h1, [], ["Post not found"]),
-          tag(:p, [], [tag(:a, [href: "/posts"], ["Back to posts"])])
-        ])
+        component(EmptyState,
+          title: "Post not found",
+          back_href: "/posts",
+          back_label: "Back to posts"
+        )
 
       post ->
         changeset = assigns[:changeset] || Fractal.Post.changeset(post, %{})

@@ -27,5 +27,25 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
           Mix.shell().info(File.read!(file))
         end)
     end
+
+    print_component_inventory()
+  end
+
+  defp print_component_inventory do
+    Mix.Task.run("app.start", [])
+
+    Mix.shell().info("\n<!-- component inventory (live — check before creating one) -->\n")
+
+    case Fractal.Component.all() do
+      [] ->
+        Mix.shell().info("No components defined yet (mix fractal.gen.component Name).")
+
+      components ->
+        Enum.each(components, fn component ->
+          Mix.shell().info(
+            "- #{inspect(component)} — example assigns: #{inspect(component.example())}"
+          )
+        end)
+    end
   end
 end

@@ -98,6 +98,17 @@ defmodule Fractal.Router do
     end
   end
 
+  # the component gallery — development only
+  def call(%Plug.Conn{method: "GET", path_info: ["fractal", "components"]} = conn, _opts) do
+    if dev_mode?() do
+      conn
+      |> put_resp_content_type("text/html")
+      |> send_resp(200, Layout.shell("Components", Fractal.Component.gallery()))
+    else
+      not_found(conn, current_path(conn))
+    end
+  end
+
   # files under assets/static/, referenced via Fractal.Assets.asset_path/1
   def call(%Plug.Conn{method: "GET", path_info: ["assets" | _rest]} = conn, _opts) do
     conn = Plug.Static.call(conn, @static_opts)
@@ -450,20 +461,7 @@ defmodule Fractal.Router do
     |> send_resp(404, Layout.shell("Not found", body))
   end
 
-  # Scans the app's ebin for modules instead of using Application.spec/2 so
-  # that pages compiled after boot (by the dev reloader) are still found.
-  defp candidate_modules do
-    case :code.lib_dir(:fractal) do
-      {:error, _reason} ->
-        Application.spec(:fractal, :modules) || []
-
-      dir ->
-        [List.to_string(dir), "ebin", "*.beam"]
-        |> Path.join()
-        |> Path.wildcard()
-        |> Enum.map(&(&1 |> Path.basename(".beam") |> String.to_atom()))
-    end
-  end
+  defp candidate_modules, do: Fractal.Discovery.modules()
 
   defp dev_mode?, do: Application.get_env(:fractal, :live_reload, false)
 end

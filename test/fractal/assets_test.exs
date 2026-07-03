@@ -46,6 +46,16 @@ defmodule Fractal.AssetsTest do
       assert css =~ ".logo { width: 3.5rem;"
     end
 
+    test "includes every component's style/0, scoped, before page styles" do
+      {_hash, css} = Assets.css_bundle()
+
+      assert css =~ ~s([data-component="empty-state"] {)
+
+      {component_index, _} = :binary.match(css, ~s([data-component="empty-state"]))
+      {page_index, _} = :binary.match(css, ~s([data-page="home"]))
+      assert component_index < page_index
+    end
+
     test "css_path/0 carries the bundle hash" do
       {hash, _css} = Assets.css_bundle()
 

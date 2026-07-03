@@ -268,6 +268,86 @@ defmodule Fractal.VerifyTest do
     assert message =~ "is not set"
   end
 
+  defmodule GoodComponent do
+    use Fractal.Component
+
+    @impl Fractal.Component
+    def render(assigns), do: tag(:p, [], [assigns.text])
+
+    @impl Fractal.Component
+    def example, do: %{text: "hello"}
+  end
+
+  defmodule BrokenExampleComponent do
+    use Fractal.Component
+
+    @impl Fractal.Component
+    def render(assigns), do: tag(:p, [], [assigns.missing_key])
+
+    @impl Fractal.Component
+    def example, do: %{}
+  end
+
+  defmodule BadStyleComponent do
+    use Fractal.Component
+
+    @impl Fractal.Component
+    def render(_assigns), do: "x"
+
+    @impl Fractal.Component
+    def style, do: ".x { color: red;"
+
+    @impl Fractal.Component
+    def example, do: %{}
+  end
+
+  defmodule CdnComponent do
+    use Fractal.Component
+
+    @impl Fractal.Component
+    def render(_assigns),
+      do: raw(~s(<link href="https://cdn.example.com/x.css" rel="stylesheet">))
+
+    @impl Fractal.Component
+    def example, do: %{}
+  end
+
+  describe "run_components/1" do
+    test "a well-formed component passes" do
+      assert Verify.ok?(Verify.run_components([GoodComponent]))
+      assert Verify.ok?(Verify.run_components([Fractal.Components.EmptyState]))
+    end
+
+    test "detects examples that fail to render" do
+      errors = Verify.errors(Verify.run_components([BrokenExampleComponent]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "renders its example" and message =~ "raised"
+             end)
+    end
+
+    test "detects unbalanced component styles" do
+      errors = Verify.errors(Verify.run_components([BadStyleComponent]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "declares valid styles" and message =~ "unbalanced braces"
+             end)
+    end
+
+    test "component renders go through the same scans as pages" do
+      errors = Verify.errors(Verify.run_components([CdnComponent]))
+
+      assert Enum.any?(errors, fn {_name, {:error, message}} ->
+               message =~ "external script or stylesheet"
+             end)
+    end
+  end
+
+  test "unused_components/0 only reports components no page renders" do
+    # EmptyState is rendered by the post show/edit pages
+    refute inspect(Fractal.Components.EmptyState) in Verify.unused_components()
+  end
+
   test "detects unbalanced braces in style/0" do
     results = Verify.run([BadStyle])
     errors = Verify.errors(results)

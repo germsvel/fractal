@@ -53,6 +53,11 @@ defmodule Fractal.Page do
   to the page (they cannot affect other pages). Shared design tokens
   live in `assets/app.css`. See `Fractal.Assets` and `guides/assets.md`.
 
+  Shared markup belongs in components — one-file modules rendered with
+  the imported `component/2` helper. Check `/fractal/components` (dev)
+  or `mix fractal.ai.docs` for the existing vocabulary before creating
+  one. See `Fractal.Component`.
+
   Each action option keeps a form and the action it submits to in one
   file. Declaring an action route without defining its handler (or vice
   versa) is a compile-time error — the same goes for `:events` and
@@ -176,6 +181,7 @@ defmodule Fractal.Page do
       import Fractal.HTML
       import Fractal.Interactive
       import Fractal.Assets, only: [asset_path: 1]
+      import Fractal.Component, only: [component: 1, component: 2]
 
       @fractal_page_path Keyword.get(opts, :path)
       @fractal_page_title Keyword.get(opts, :title)
