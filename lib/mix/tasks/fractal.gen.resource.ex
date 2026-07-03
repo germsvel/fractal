@@ -14,7 +14,10 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     * `lib/fractal/pages/new_post.ex` — form at `/posts/new`, handling
       `POST /posts` in the same file
     * `lib/fractal/pages/post.ex` — show page at `/posts/:id`
-    * `test/fractal/pages/posts_test.exs` — tests for all three pages
+    * `lib/fractal/pages/edit_post.ex` — edit form and delete button at
+      `/posts/:id/edit`, handling `PUT /posts/:id` and
+      `DELETE /posts/:id` in the same file
+    * `test/fractal/pages/posts_test.exs` — tests for all four pages
 
   Supported field types: `string`, `text`, `integer`, `float`, `boolean`,
   `date`. All fields are required by default — edit the schema's
@@ -69,6 +72,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
       {Path.join(["lib", "fractal", "pages", "#{plural}.ex"]), index_template(context)},
       {Path.join(["lib", "fractal", "pages", "new_#{singular}.ex"]), new_template(context)},
       {Path.join(["lib", "fractal", "pages", "#{singular}.ex"]), show_template(context)},
+      {Path.join(["lib", "fractal", "pages", "edit_#{singular}.ex"]), edit_template(context)},
       {Path.join(["test", "fractal", "pages", "#{plural}_test.exs"]), test_template(context)}
     ]
 
@@ -309,8 +313,93 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
           #{ctx.singular} ->
             tag(:section, [], [
               tag(:h1, [], [to_string(#{ctx.singular}.#{first_field})]),#{details}
+              tag(:p, [], [
+                tag(:a, [href: "#{ctx.route}/\#{#{ctx.singular}.id}/edit"], ["Edit"]),
+                " · ",
+                tag(:a, [href: "#{ctx.route}"], ["Back to #{ctx.plural}"])
+              ])
+            ])
+        end
+      end
+
+      defp fetch(id) when is_binary(id) do
+        case Integer.parse(id) do
+          {id, ""} -> Repo.get(Fractal.#{ctx.camel}, id)
+          _ -> nil
+        end
+      end
+
+      defp fetch(_id), do: nil
+    end
+    """
+  end
+
+  defp edit_template(ctx) do
+    form_fields = Enum.map_join(ctx.fields, ",\n              ", &form_field/1)
+
+    """
+    defmodule Fractal.Pages.Edit#{ctx.camel} do
+      @moduledoc "Form to edit a #{ctx.human_downcase}; handles PUT and DELETE #{ctx.route}/:id in this same file."
+
+      use Fractal.Page,
+        path: "#{ctx.route}/:id/edit",
+        title: "Edit #{ctx.human_downcase}",
+        put: "#{ctx.route}/:id",
+        delete: "#{ctx.route}/:id"
+
+      import Fractal.Form
+
+      alias Fractal.Repo
+
+      @impl Fractal.Page
+      def render(assigns) do
+        case fetch(assigns.params["id"]) do
+          nil ->
+            tag(:section, [], [
+              tag(:h1, [], ["#{ctx.human} not found"]),
               tag(:p, [], [tag(:a, [href: "#{ctx.route}"], ["Back to #{ctx.plural}"])])
             ])
+
+          #{ctx.singular} ->
+            changeset = assigns[:changeset] || Fractal.#{ctx.camel}.changeset(#{ctx.singular}, %{})
+
+            tag(:section, [], [
+              tag(:h1, [], ["Edit #{ctx.human_downcase}"]),
+              form_for(changeset, "#{ctx.route}/\#{#{ctx.singular}.id}", [method: :put], [
+                #{form_fields},
+                submit("Save #{ctx.human_downcase}")
+              ]),
+              tag(:p, [], [
+                button_to("Delete #{ctx.human_downcase}", "#{ctx.route}/\#{#{ctx.singular}.id}", method: :delete)
+              ]),
+              tag(:p, [], [tag(:a, [href: "#{ctx.route}/\#{#{ctx.singular}.id}"], ["Back to #{ctx.human_downcase}"])])
+            ])
+        end
+      end
+
+      @impl Fractal.Page
+      def handle_put(assigns) do
+        case fetch(assigns.params["id"]) do
+          nil ->
+            {:redirect, "#{ctx.route}"}
+
+          #{ctx.singular} ->
+            case Repo.update(Fractal.#{ctx.camel}.changeset(#{ctx.singular}, assigns.params)) do
+              {:ok, #{ctx.singular}} -> {:redirect, "#{ctx.route}/\#{#{ctx.singular}.id}"}
+              {:error, changeset} -> {:render, %{changeset: changeset}}
+            end
+        end
+      end
+
+      @impl Fractal.Page
+      def handle_delete(assigns) do
+        case fetch(assigns.params["id"]) do
+          nil ->
+            {:redirect, "#{ctx.route}"}
+
+          #{ctx.singular} ->
+            Repo.delete!(#{ctx.singular})
+            {:redirect, "#{ctx.route}"}
         end
       end
 
@@ -336,6 +425,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
     {first_field, first_type} = hd(ctx.fields)
     first_value = sample_value({first_field, first_type}, 1)
+    updated_value = sample_value({first_field, first_type}, 9)
 
     """
     defmodule Fractal.Pages.#{ctx.camel_plural}Test do
@@ -349,9 +439,17 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       defp get_page(path), do: :get |> conn(path) |> Router.call([])
       defp post_page(path, params), do: :post |> conn(path, params) |> Router.call([])
+      defp put_page(path, params), do: :put |> conn(path, params) |> Router.call([])
+      defp delete_page(path), do: :delete |> conn(path) |> Router.call([])
 
       test "all #{ctx.human_downcase} pages pass Fractal's verification checks" do
-        pages = [Fractal.Pages.#{ctx.camel_plural}, Fractal.Pages.New#{ctx.camel}, Fractal.Pages.#{ctx.camel}]
+        pages = [
+          Fractal.Pages.#{ctx.camel_plural},
+          Fractal.Pages.New#{ctx.camel},
+          Fractal.Pages.#{ctx.camel},
+          Fractal.Pages.Edit#{ctx.camel}
+        ]
+
         results = Fractal.Verify.run(pages)
         assert Fractal.Verify.ok?(results), inspect(Fractal.Verify.errors(results))
       end
@@ -399,6 +497,52 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
         assert conn.status == 200
         assert conn.resp_body =~ "not found"
+      end
+
+      test "GET #{ctx.route}/:id/edit shows the pre-filled edit form" do
+        {:ok, #{ctx.singular}} =
+          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+
+        conn = get_page("#{ctx.route}/\#{#{ctx.singular}.id}/edit")
+
+        assert conn.status == 200
+        assert conn.resp_body =~ ~s[action="#{ctx.route}/\#{#{ctx.singular}.id}"]
+        assert conn.resp_body =~ ~s[name="_method" value="put"]
+        assert conn.resp_body =~ ~s[name="_method" value="delete"]
+        assert conn.resp_body =~ "#{first_value}"
+      end
+
+      test "PUT #{ctx.route}/:id updates the #{ctx.human_downcase} and redirects to it" do
+        {:ok, #{ctx.singular}} =
+          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+
+        conn = put_page("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => "#{updated_value}"})
+
+        assert conn.status == 303
+        assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}/\#{#{ctx.singular}.id}"]
+        assert to_string(Repo.get!(Fractal.#{ctx.camel}, #{ctx.singular}.id).#{first_field}) == "#{updated_value}"
+      end
+
+      test "PUT #{ctx.route}/:id with invalid params re-renders the edit form with errors" do
+        {:ok, #{ctx.singular}} =
+          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+
+        conn = put_page("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => ""})
+
+        assert conn.status == 200
+        assert conn.resp_body =~ "can&#39;t be blank"
+        assert to_string(Repo.get!(Fractal.#{ctx.camel}, #{ctx.singular}.id).#{first_field}) == "#{first_value}"
+      end
+
+      test "DELETE #{ctx.route}/:id destroys the #{ctx.human_downcase} and redirects to the index" do
+        {:ok, #{ctx.singular}} =
+          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+
+        conn = delete_page("#{ctx.route}/\#{#{ctx.singular}.id}")
+
+        assert conn.status == 303
+        assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}"]
+        assert Repo.get(Fractal.#{ctx.camel}, #{ctx.singular}.id) == nil
       end
     end
     """

@@ -73,11 +73,36 @@ defmodule Fractal.PageTest do
     assert Exception.message(error) =~ "must declare a route"
   end
 
+  defmodule WithAllActions do
+    use Fractal.Page,
+      path: "/waa/:id/edit",
+      put: "/waa/:id",
+      delete: "/waa/:id"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:p, [], ["edit"])
+
+    @impl Fractal.Page
+    def handle_put(_assigns), do: {:redirect, "/waa/1"}
+
+    @impl Fractal.Page
+    def handle_delete(_assigns), do: {:redirect, "/"}
+  end
+
   test "post_path/0 defaults to nil and reflects the :post option" do
     assert Sample.post_path() == nil
     assert WithPost.post_path() == "/with-post"
     assert Fractal.Page.post_path(Sample) == nil
     assert Fractal.Page.post_path(WithPost) == "/with-post"
+  end
+
+  test "put and delete routes are declared like post routes" do
+    assert WithAllActions.put_path() == "/waa/:id"
+    assert WithAllActions.delete_path() == "/waa/:id"
+    assert WithAllActions.post_path() == nil
+    assert Fractal.Page.action_route(WithAllActions, :put) == "/waa/:id"
+    assert Fractal.Page.action_route(WithAllActions, :delete) == "/waa/:id"
+    assert Fractal.Page.action_route(Sample, :put) == nil
   end
 
   describe "match/2" do
@@ -130,6 +155,46 @@ defmodule Fractal.PageTest do
 
     refute error == :no_raise
     assert Exception.message(error) =~ "does not define handle_post/1"
+  end
+
+  test "declaring put: without handle_put/1 fails to compile" do
+    error =
+      try do
+        defmodule PutNoHandler do
+          use Fractal.Page, path: "/pnh2/:id/edit", put: "/pnh2/:id"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not define handle_put/1"
+  end
+
+  test "defining handle_delete/1 without delete: fails to compile" do
+    error =
+      try do
+        defmodule DeleteNoRoute do
+          use Fractal.Page, path: "/dnr"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_delete(_assigns), do: {:redirect, "/"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not declare a delete route"
   end
 
   test "defining handle_post/1 without post: fails to compile" do

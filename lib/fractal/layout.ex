@@ -37,6 +37,7 @@ defmodule Fractal.Layout do
     color: #e6e9f2; font: inherit;
   }
   .field .error { color: #ff8787; margin: 0.3rem 0 0; font-size: 0.9rem; }
+  form.button-to { display: inline; }
   button[type="submit"] {
     padding: 0.55rem 1.2rem; border-radius: 0.35rem; border: none;
     background: #7cc4ff; color: #0b1021; font: inherit; font-weight: 600; cursor: pointer;

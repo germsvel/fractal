@@ -1,7 +1,8 @@
 defmodule Fractal.Page do
   @moduledoc """
   The core Fractal primitive: a page is one module that declares its
-  routes and handles them — including form submissions.
+  routes and handles them — including form submissions for the full
+  create/update/destroy lifecycle.
 
       defmodule Fractal.Pages.About do
         @moduledoc "The About page, served at /about."
@@ -28,41 +29,63 @@ defmodule Fractal.Page do
     * `:title` (optional) — the page title used in the layout. Defaults
       to a humanized version of the module name.
     * `:post` (optional) — a POST route handled by this same module's
-      `handle_post/1`. This keeps a form and the action it submits to in
-      one file. Declaring `:post` without defining `handle_post/1` (or
-      vice versa) is a compile-time error.
+      `handle_post/1`.
+    * `:put` (optional) — an update route handled by `handle_put/1`.
+      Matches both PUT and PATCH requests.
+    * `:delete` (optional) — a destroy route handled by `handle_delete/1`.
+
+  Each action option keeps a form and the action it submits to in one
+  file. Declaring an action route without defining its handler (or vice
+  versa) is a compile-time error.
 
   ## Form submissions
 
-      defmodule Fractal.Pages.NewPost do
-        use Fractal.Page, path: "/posts/new", title: "New post", post: "/posts"
+      defmodule Fractal.Pages.EditPost do
+        use Fractal.Page,
+          path: "/posts/:id/edit",
+          title: "Edit post",
+          put: "/posts/:id",
+          delete: "/posts/:id"
 
         @impl Fractal.Page
         def render(assigns) do
-          changeset = assigns[:changeset] || Fractal.Post.changeset(%Fractal.Post{}, %{})
-          # ... render the form (see Fractal.Form) ...
+          # ... render the edit form and a delete button (see Fractal.Form) ...
         end
 
         @impl Fractal.Page
-        def handle_post(assigns) do
-          case Fractal.Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, assigns.params)) do
+        def handle_put(assigns) do
+          post = Fractal.Repo.get(Fractal.Post, assigns.params["id"])
+
+          case Fractal.Repo.update(Fractal.Post.changeset(post, assigns.params)) do
             {:ok, post} -> {:redirect, "/posts/\#{post.id}"}
             {:error, changeset} -> {:render, %{changeset: changeset}}
           end
         end
+
+        @impl Fractal.Page
+        def handle_delete(assigns) do
+          # ... delete, then ...
+          {:redirect, "/posts"}
+        end
       end
 
-  `handle_post/1` must return:
+  Every handler must return:
 
     * `{:redirect, to}` — respond 303 and send the browser to `to`
     * `{:render, extra_assigns}` — re-render this page's `render/1` with
       `extra_assigns` merged in (how validation errors round-trip)
 
+  Browsers only submit GET and POST forms, so PUT/PATCH/DELETE arrive as
+  a POST carrying a hidden `_method` field — `Fractal.Form.form_for/4`
+  with `method: :put` and `Fractal.Form.button_to/3` emit it, and the
+  router rewrites the method before dispatching. Native PUT/PATCH/DELETE
+  requests work too.
+
   ## Assigns
 
-  `render/1` and `handle_post/1` receive a map with:
+  `render/1` and the `handle_*/1` callbacks receive a map with:
 
-    * `:params` — merged path, query, and (for POST) body parameters,
+    * `:params` — merged path, query, and (for non-GET) body parameters,
       all string-keyed
     * `:path` — the request path
     * `:conn` — the raw `Plug.Conn` (or `nil` outside a request, e.g.
@@ -76,11 +99,21 @@ defmodule Fractal.Page do
   @callback path() :: String.t()
   @callback title() :: String.t()
   @callback post_path() :: String.t() | nil
+  @callback put_path() :: String.t() | nil
+  @callback delete_path() :: String.t() | nil
   @callback render(assigns :: map()) :: Fractal.HTML.Safe.t() | iodata()
-  @callback handle_post(assigns :: map()) ::
-              {:redirect, String.t()} | {:render, map()}
+  @callback handle_post(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
+  @callback handle_put(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
+  @callback handle_delete(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
 
-  @optional_callbacks post_path: 0, handle_post: 1
+  @optional_callbacks post_path: 0,
+                      put_path: 0,
+                      delete_path: 0,
+                      handle_post: 1,
+                      handle_put: 1,
+                      handle_delete: 1
+
+  @actions [:post, :put, :delete]
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
@@ -90,6 +123,8 @@ defmodule Fractal.Page do
       @fractal_page_path Keyword.get(opts, :path)
       @fractal_page_title Keyword.get(opts, :title)
       @fractal_page_post Keyword.get(opts, :post)
+      @fractal_page_put Keyword.get(opts, :put)
+      @fractal_page_delete Keyword.get(opts, :delete)
       @before_compile Fractal.Page
     end
   end
@@ -97,23 +132,38 @@ defmodule Fractal.Page do
   defmacro __before_compile__(env) do
     path = Module.get_attribute(env.module, :fractal_page_path)
     title = Module.get_attribute(env.module, :fractal_page_title)
-    post = Module.get_attribute(env.module, :fractal_page_post)
+
+    actions =
+      for action <- @actions do
+        {action, Module.get_attribute(env.module, :"fractal_page_#{action}")}
+      end
 
     validate_path!(env.module, path)
-    if post, do: validate_post!(env.module, post)
-    validate_handle_post!(env.module, post, Module.defines?(env.module, {:handle_post, 1}))
+
+    for {action, route} <- actions do
+      if route, do: validate_action_route!(env.module, action, route)
+
+      validate_handler!(
+        env.module,
+        action,
+        route,
+        Module.defines?(env.module, {:"handle_#{action}", 1})
+      )
+    end
 
     title = title || default_title(env.module)
 
-    quote do
+    quote bind_quoted: [path: path, title: title, actions: actions] do
       @impl Fractal.Page
       def path, do: unquote(path)
 
       @impl Fractal.Page
       def title, do: unquote(title)
 
-      @impl Fractal.Page
-      def post_path, do: unquote(post)
+      for {action, route} <- actions do
+        @impl Fractal.Page
+        def unquote(:"#{action}_path")(), do: unquote(route)
+      end
     end
   end
 
@@ -136,27 +186,29 @@ defmodule Fractal.Page do
   end
 
   @doc false
-  def validate_post!(module, post) do
-    unless route?(post) do
+  def validate_action_route!(module, action, route) do
+    unless route?(route) do
       raise ArgumentError,
-            "#{inspect(module)} has an invalid post route #{inspect(post)} — " <>
+            "#{inspect(module)} has an invalid #{action} route #{inspect(route)} — " <>
               "it must be a string starting with \"/\" with segments like " <>
               "\"posts\" or \":id\""
     end
   end
 
   @doc false
-  def validate_handle_post!(module, post, defines_handle_post?) do
-    cond do
-      post && not defines_handle_post? ->
-        raise ArgumentError,
-              "#{inspect(module)} declares post: #{inspect(post)} but does not " <>
-                "define handle_post/1"
+  def validate_handler!(module, action, route, defines_handler?) do
+    handler = "handle_#{action}/1"
 
-      is_nil(post) && defines_handle_post? ->
+    cond do
+      route && not defines_handler? ->
         raise ArgumentError,
-              "#{inspect(module)} defines handle_post/1 but does not declare a " <>
-                "post route: use Fractal.Page, path: ..., post: \"/example\""
+              "#{inspect(module)} declares #{action}: #{inspect(route)} but does not " <>
+                "define #{handler}"
+
+      is_nil(route) && defines_handler? ->
+        raise ArgumentError,
+              "#{inspect(module)} defines #{handler} but does not declare a " <>
+                "#{action} route: use Fractal.Page, path: ..., #{action}: \"/example\""
 
       true ->
         :ok
@@ -189,11 +241,24 @@ defmodule Fractal.Page do
     Enum.count(segments(pattern), &String.starts_with?(&1, ":"))
   end
 
+  @doc "The actions a page can declare besides GET: `#{inspect(@actions)}`."
+  @spec actions() :: [atom()]
+  def actions, do: @actions
+
+  @doc """
+  Returns the route `module` declares for `action`, or `nil`.
+
+  Works for any page, including ones that predate an action's existence.
+  """
+  @spec action_route(module(), atom()) :: String.t() | nil
+  def action_route(module, action) when action in @actions do
+    fun = :"#{action}_path"
+    if function_exported?(module, fun, 0), do: apply(module, fun, []), else: nil
+  end
+
   @doc "Returns the post route of `module`, or `nil` (works for any page)."
   @spec post_path(module()) :: String.t() | nil
-  def post_path(module) do
-    if function_exported?(module, :post_path, 0), do: module.post_path(), else: nil
-  end
+  def post_path(module), do: action_route(module, :post)
 
   @doc "Returns `true` if `module` is a compiled Fractal page."
   @spec page?(module()) :: boolean()

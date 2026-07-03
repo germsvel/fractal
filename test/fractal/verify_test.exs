@@ -74,6 +74,26 @@ defmodule Fractal.VerifyTest do
     def handle_post(_assigns), do: {:redirect, "/"}
   end
 
+  # declares put/delete routes but bypasses the compile-time handler checks
+  defmodule SneakyPutDelete do
+    @behaviour Fractal.Page
+
+    @impl Fractal.Page
+    def path, do: "/verify-sneaky-pd/edit"
+
+    @impl Fractal.Page
+    def title, do: "Sneaky put/delete"
+
+    @impl Fractal.Page
+    def put_path, do: "/verify-sneaky-pd"
+
+    @impl Fractal.Page
+    def delete_path, do: "/verify-sneaky-pd"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
   # declares a post route but bypasses the compile-time handle_post check
   defmodule SneakyPost do
     @behaviour Fractal.Page
@@ -131,6 +151,19 @@ defmodule Fractal.VerifyTest do
 
     assert Enum.any?(errors, fn {name, {:error, message}} ->
              name =~ "handles its post route" and message =~ "does not export handle_post/1"
+           end)
+  end
+
+  test "detects put and delete routes without their handlers" do
+    results = Verify.run([SneakyPutDelete])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "handles its put route" and message =~ "does not export handle_put/1"
+           end)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "handles its delete route" and message =~ "does not export handle_delete/1"
            end)
   end
 

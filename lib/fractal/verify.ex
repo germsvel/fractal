@@ -10,10 +10,12 @@ defmodule Fractal.Verify do
   Checks:
 
     * at least one page module exists
-    * no two pages claim the same GET route, and no two the same POST route
-    * every page has a well-formed path (and post route, if any) and a
-      non-empty title
-    * pages with a post route implement `handle_post/1`
+    * no two pages claim the same route for the same method
+      (GET/POST/PUT/DELETE)
+    * every page has a well-formed path (and action routes, if any) and
+      a non-empty title
+    * every declared action route (`post:`, `put:`, `delete:`) has its
+      handler (`handle_post/1`, `handle_put/1`, `handle_delete/1`)
     * every page's `render/1` runs without raising (with empty params)
       and returns renderable content
 
@@ -28,11 +30,13 @@ defmodule Fractal.Verify do
   @doc "Runs all checks against `pages` (defaults to the discovered pages)."
   @spec run([module()]) :: [result()]
   def run(pages \\ Router.pages()) do
-    [
-      check_pages_exist(pages),
-      check_unique_routes(pages, "GET", & &1.path()),
-      check_unique_routes(pages, "POST", &Page.post_path/1)
-    ] ++ Enum.flat_map(pages, &check_page/1)
+    action_uniqueness =
+      for action <- Page.actions() do
+        check_unique_routes(pages, method_name(action), &Page.action_route(&1, action))
+      end
+
+    [check_pages_exist(pages), check_unique_routes(pages, "GET", & &1.path())] ++
+      action_uniqueness ++ Enum.flat_map(pages, &check_page/1)
   end
 
   @doc "Returns `true` when every result passed."
@@ -99,12 +103,15 @@ defmodule Fractal.Verify do
   end
 
   defp check_page(page) do
+    action_checks =
+      for action <- Page.actions() do
+        {"#{inspect(page)} handles its #{action} route", validate_action(page, action)}
+      end
+
     [
       {"#{inspect(page)} declares a valid path", validate_path(page)},
-      {"#{inspect(page)} declares a valid title", validate_title(page)},
-      {"#{inspect(page)} handles its post route", validate_post(page)},
-      {"#{inspect(page)} renders", validate_render(page)}
-    ]
+      {"#{inspect(page)} declares a valid title", validate_title(page)}
+    ] ++ action_checks ++ [{"#{inspect(page)} renders", validate_render(page)}]
   end
 
   defp validate_path(page) do
@@ -131,26 +138,29 @@ defmodule Fractal.Verify do
     exception -> {:error, "title/0 raised: #{Exception.message(exception)}"}
   end
 
-  defp validate_post(page) do
-    case Page.post_path(page) do
+  defp validate_action(page, action) do
+    case Page.action_route(page, action) do
       nil ->
         :ok
 
-      post ->
+      route ->
         cond do
-          not Page.route?(post) ->
-            {:error, "invalid post route #{inspect(post)} — must be a string starting with \"/\""}
+          not Page.route?(route) ->
+            {:error,
+             "invalid #{action} route #{inspect(route)} — must be a string starting with \"/\""}
 
-          not function_exported?(page, :handle_post, 1) ->
-            {:error, "declares post route #{post} but does not export handle_post/1"}
+          not function_exported?(page, :"handle_#{action}", 1) ->
+            {:error, "declares #{action} route #{route} but does not export handle_#{action}/1"}
 
           true ->
             :ok
         end
     end
   rescue
-    exception -> {:error, "post_path/0 raised: #{Exception.message(exception)}"}
+    exception -> {:error, "#{action}_path/0 raised: #{Exception.message(exception)}"}
   end
+
+  defp method_name(action), do: action |> to_string() |> String.upcase()
 
   defp validate_render(page) do
     assigns = %{conn: nil, params: %{}, path: safe_route(page, & &1.path()) || "/"}

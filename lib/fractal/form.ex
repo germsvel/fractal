@@ -29,10 +29,53 @@ defmodule Fractal.Form do
 
   alias Ecto.Changeset
 
-  @doc "Renders a POST form around `children`."
-  @spec form_for(Changeset.t() | nil, String.t(), term()) :: Fractal.HTML.Safe.t()
-  def form_for(_changeset, action, children) do
-    tag(:form, [action: action, method: "post"], children)
+  @doc """
+  Renders a form around `children`, submitting to `action`.
+
+  The HTTP method defaults to `:post`. Pass `method: :put` (or
+  `:delete`) to target a page's update/destroy handler — the form still
+  submits as POST (browsers support nothing else) with a hidden
+  `_method` field the router rewrites before dispatch.
+
+      form_for(changeset, "/posts/\#{post.id}", [method: :put], [
+        input(changeset, :title),
+        submit("Save")
+      ])
+  """
+  @spec form_for(Changeset.t() | nil, String.t(), keyword(), term()) :: Fractal.HTML.Safe.t()
+  def form_for(changeset, action, opts \\ [], children)
+
+  def form_for(_changeset, action, opts, children) do
+    {method, opts} = Keyword.pop(opts, :method, :post)
+
+    tag(
+      :form,
+      [action: action, method: "post"] ++ opts,
+      [method_field(method) | List.wrap(children)]
+    )
+  end
+
+  @doc """
+  Renders a one-button form — the idiomatic delete button:
+
+      button_to("Delete post", "/posts/\#{post.id}", method: :delete)
+
+  Options other than `:method` become attributes on the `<button>`.
+  """
+  @spec button_to(String.t(), String.t(), keyword()) :: Fractal.HTML.Safe.t()
+  def button_to(label, action, opts \\ []) do
+    {method, opts} = Keyword.pop(opts, :method, :post)
+
+    tag(:form, [action: action, method: "post", class: "button-to"], [
+      method_field(method),
+      tag(:button, [type: "submit"] ++ opts, [label])
+    ])
+  end
+
+  defp method_field(:post), do: raw("")
+
+  defp method_field(method) when method in [:put, :patch, :delete] do
+    tag(:input, type: "hidden", name: "_method", value: to_string(method))
   end
 
   @doc """

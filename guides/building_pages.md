@@ -35,8 +35,9 @@ Rules:
 - Route segments may be dynamic: `path: "/posts/:id"` binds
   `params["id"]`. Otherwise routes match exactly — `/about` does not
   match `/about/team` — and static segments beat dynamic ones.
-- Pages can handle form submissions in the same file via the `:post`
-  option and `handle_post/1` — see `guides/forms_and_data.md`.
+- Pages handle form submissions in the same file via the `:post`,
+  `:put`, and `:delete` options and their `handle_*/1` callbacks — see
+  `guides/forms_and_data.md`.
 
 ## Rendering HTML
 

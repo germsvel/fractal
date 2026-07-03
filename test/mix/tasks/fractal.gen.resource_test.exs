@@ -48,10 +48,21 @@ defmodule Mix.Tasks.Fractal.Gen.ResourceTest do
 
       show = File.read!("lib/fractal/pages/widget.ex")
       assert show =~ ~s[use Fractal.Page, path: "/widgets/:id", title: "Widget"]
+      assert show =~ ~s[/edit"], "show page links to the edit page"
+
+      edit = File.read!("lib/fractal/pages/edit_widget.ex")
+      assert edit =~ ~s[path: "/widgets/:id/edit"]
+      assert edit =~ ~s[put: "/widgets/:id"]
+      assert edit =~ ~s[delete: "/widgets/:id"]
+      assert edit =~ "def handle_put(assigns) do"
+      assert edit =~ "def handle_delete(assigns) do"
+      assert edit =~ ~s[button_to("Delete widget"]
 
       tests = File.read!("test/fractal/pages/widgets_test.exs")
       assert tests =~ "use Fractal.DataCase, async: true"
       assert tests =~ ~s[post_page("/widgets", @valid_params)]
+      assert tests =~ ~s[put_page("/widgets/]
+      assert tests =~ ~s[delete_page("/widgets/]
       assert tests =~ "assert conn.status == 303"
     end)
   end

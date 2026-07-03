@@ -18,6 +18,22 @@ defmodule Fractal.FormTest do
 
     assert html =~ ~s(<form action="/posts" method="post">)
     assert html =~ ~s(<button type="submit">Go</button>)
+    refute html =~ "_method"
+  end
+
+  test "form_for/4 with method: :put emits a hidden _method field" do
+    html = render(form_for(changeset(), "/posts/1", [method: :put], [submit("Save")]))
+
+    assert html =~ ~s(<form action="/posts/1" method="post">)
+    assert html =~ ~s(<input type="hidden" name="_method" value="put">)
+  end
+
+  test "button_to/3 renders a one-button form with the method override" do
+    html = render(button_to("Delete", "/posts/1", method: :delete))
+
+    assert html =~ ~s(<form action="/posts/1" method="post" class="button-to">)
+    assert html =~ ~s(<input type="hidden" name="_method" value="delete">)
+    assert html =~ ~s(<button type="submit">Delete</button>)
   end
 
   test "input/3 renders a labelled, named input" do

@@ -4,12 +4,15 @@ defmodule Fractal.Router do
 
   There is no route table to maintain: on each request the router matches
   the request against the routes every page module declares — `path/0`
-  for GET, `post_path/0` for POST. Route patterns may contain dynamic
-  segments (`"/posts/:id"`), which are bound into `assigns.params`.
-  Static segments win over dynamic ones when both match. New page modules
-  are picked up as soon as they are compiled, which is what makes the
-  development loop (agent writes a page → watcher recompiles → browser
-  reloads) work without restarts.
+  for GET, `post_path/0` for POST, `put_path/0` for PUT/PATCH, and
+  `delete_path/0` for DELETE. A POST carrying a hidden `_method` field
+  (emitted by `Fractal.Form`) is rewritten to that method before
+  dispatch, since browsers only submit GET and POST forms. Route
+  patterns may contain dynamic segments (`"/posts/:id"`), which are
+  bound into `assigns.params`. Static segments win over dynamic ones
+  when both match. New page modules are picked up as soon as they are
+  compiled, which is what makes the development loop (agent writes a
+  page → watcher recompiles → browser reloads) work without restarts.
 
   The router also serves `GET /fractal/reload`, the live-reload token
   endpoint polled by the script `Fractal.Layout` injects in development.
@@ -24,6 +27,9 @@ defmodule Fractal.Router do
   alias Fractal.{HTML, Layout, LiveReload, Page}
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
+  @method_override_opts Plug.MethodOverride.init([])
+
+  @methods %{"POST" => :post, "PUT" => :put, "PATCH" => :put, "DELETE" => :delete}
 
   @impl Plug
   def init(opts), do: opts
@@ -42,9 +48,20 @@ defmodule Fractal.Router do
     end
   end
 
-  def call(%Plug.Conn{method: "POST"} = conn, _opts) do
-    case find_route(:post, conn.path_info) do
-      {page, path_params} -> handle_post(conn, page, path_params)
+  def call(%Plug.Conn{method: method} = conn, _opts)
+      when method in ["POST", "PUT", "PATCH", "DELETE"] do
+    # parse the body first: a POST may carry a hidden _method field that
+    # rewrites it to PUT/PATCH/DELETE
+    conn =
+      conn
+      |> Plug.Parsers.call(@parsers_opts)
+      |> Plug.MethodOverride.call(@method_override_opts)
+      |> fetch_query_params()
+
+    action = Map.fetch!(@methods, conn.method)
+
+    case find_route(action, conn.path_info) do
+      {page, path_params} -> handle_action(conn, page, action, path_params)
       nil -> not_found(conn, current_path(conn))
     end
   end
@@ -78,7 +95,7 @@ defmodule Fractal.Router do
   end
 
   defp route_pattern(page, :get), do: page.path()
-  defp route_pattern(page, :post), do: Page.post_path(page)
+  defp route_pattern(page, action), do: Page.action_route(page, action)
 
   defp current_path(conn), do: "/" <> Enum.join(conn.path_info, "/")
 
@@ -96,11 +113,10 @@ defmodule Fractal.Router do
       render_error(conn, page, exception, __STACKTRACE__)
   end
 
-  defp handle_post(conn, page, path_params) do
-    conn = conn |> Plug.Parsers.call(@parsers_opts) |> fetch_query_params()
+  defp handle_action(conn, page, action, path_params) do
     assigns = build_assigns(conn, path_params)
 
-    case page.handle_post(assigns) do
+    case apply(page, :"handle_#{action}", [assigns]) do
       {:redirect, to} when is_binary(to) ->
         conn
         |> put_resp_header("location", to)
@@ -115,7 +131,7 @@ defmodule Fractal.Router do
 
       other ->
         raise ArgumentError,
-              "#{inspect(page)}.handle_post/1 must return {:redirect, to} or " <>
+              "#{inspect(page)}.handle_#{action}/1 must return {:redirect, to} or " <>
                 "{:render, extra_assigns}, got: #{inspect(other)}"
     end
   rescue

@@ -7,6 +7,7 @@ defmodule Fractal.Post do
 
   schema "posts" do
     field :title, :string
+    field :author, :string
     field :body, :string
 
     timestamps()
@@ -15,7 +16,7 @@ defmodule Fractal.Post do
   @doc "Builds a changeset for creating or updating a post."
   def changeset(post, attrs) do
     post
-    |> cast(attrs, [:title, :body])
-    |> validate_required([:title, :body])
+    |> cast(attrs, [:title, :author, :body])
+    |> validate_required([:title, :author, :body])
   end
 end

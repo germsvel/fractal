@@ -15,6 +15,7 @@ defmodule Fractal.Pages.NewPost do
       tag(:h1, [], ["New post"]),
       form_for(changeset, "/posts", [
         input(changeset, :title),
+        input(changeset, :author),
         textarea(changeset, :body, rows: 6),
         submit("Create post")
       ]),

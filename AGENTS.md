@@ -10,7 +10,9 @@ so purely with AI — so this file is the contract for how agents work here.
   segments (`/posts/:id`) bind `params["id"]`.
 - A page that renders a form also **handles the submission in the same
   file**: `use Fractal.Page, path: "/posts/new", post: "/posts"` plus
-  `handle_post/1`. Keep it that way — do not add controllers.
+  `handle_post/1` — likewise `put:`/`handle_put/1` (updates; matches
+  PUT and PATCH) and `delete:`/`handle_delete/1` (destroys) on the edit
+  page. Keep it that way — do not add controllers.
 - HTML is built with `Fractal.HTML.tag/3` — escaped by default, `raw/1`
   is the only escape hatch. Forms use `Fractal.Form`.
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
