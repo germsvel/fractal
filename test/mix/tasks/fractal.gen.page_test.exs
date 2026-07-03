@@ -51,8 +51,9 @@ defmodule Mix.Tasks.Fractal.Gen.PageTest do
       assert page =~ ~s[trigger("Refresh", "refresh", target: "#live-demo-region")]
 
       tests = File.read!("test/fractal/pages/live_demo_test.exs")
-      assert tests =~ ~s[fire_event("refresh", %{})]
-      assert tests =~ ~s[fire_event("clear", %{})]
+      assert tests =~ "import Fractal.Test"
+      assert tests =~ ~s[fire_event("/live-demo", "refresh")]
+      assert tests =~ ~s[fire_event("/live-demo", "clear")]
       assert tests =~ "rejects events the page does not declare"
     end)
   end

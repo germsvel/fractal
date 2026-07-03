@@ -1,20 +1,15 @@
 defmodule Fractal.Pages.PostsTest do
   use Fractal.DataCase, async: true
 
-  import Plug.Test
+  import Fractal.Test
 
-  alias Fractal.{Repo, Router}
+  alias Fractal.Repo
 
   @valid_params %{
     "title" => "some value 1",
     "author" => "some author",
     "body" => "some longer value 2"
   }
-
-  defp get_page(path), do: :get |> conn(path) |> Router.call([])
-  defp post_page(path, params), do: :post |> conn(path, params) |> Router.call([])
-  defp put_page(path, params), do: :put |> conn(path, params) |> Router.call([])
-  defp delete_page(path), do: :delete |> conn(path) |> Router.call([])
 
   test "all post pages pass Fractal's verification checks" do
     pages = [
@@ -32,14 +27,14 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, _post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = get_page("/posts")
+    conn = get("/posts")
 
     assert conn.status == 200
     assert conn.resp_body =~ "some value 1"
   end
 
   test "GET /posts/new shows the form" do
-    conn = get_page("/posts/new")
+    conn = get("/posts/new")
 
     assert conn.status == 200
     assert conn.resp_body =~ ~s(action="/posts")
@@ -47,19 +42,19 @@ defmodule Fractal.Pages.PostsTest do
   end
 
   test "POST /posts with valid params creates and redirects to the new post" do
-    conn = post_page("/posts", @valid_params)
+    conn = post("/posts", @valid_params)
 
     assert conn.status == 303
     [location] = Plug.Conn.get_resp_header(conn, "location")
     assert location =~ ~r{^/posts/\d+$}
 
-    shown = get_page(location)
+    shown = get(location)
     assert shown.status == 200
     assert shown.resp_body =~ "some value 1"
   end
 
   test "POST /posts with invalid params re-renders the form with errors" do
-    conn = post_page("/posts", %{})
+    conn = post("/posts", %{})
 
     assert conn.status == 200
     assert conn.resp_body =~ "can&#39;t be blank"
@@ -67,7 +62,7 @@ defmodule Fractal.Pages.PostsTest do
   end
 
   test "GET /posts/:id for a missing post renders not found" do
-    conn = get_page("/posts/0")
+    conn = get("/posts/0")
 
     assert conn.status == 200
     assert conn.resp_body =~ "not found"
@@ -77,7 +72,7 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = get_page("/posts/#{post.id}")
+    conn = get("/posts/#{post.id}")
 
     assert conn.status == 200
     assert conn.resp_body =~ ~s[action="/posts/#{post.id}"]
@@ -89,7 +84,7 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = get_page("/posts/#{post.id}/edit")
+    conn = get("/posts/#{post.id}/edit")
 
     assert conn.status == 200
     assert conn.resp_body =~ ~s[action="/posts/#{post.id}"]
@@ -102,7 +97,7 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = put_page("/posts/#{post.id}", %{"title" => "some value 9"})
+    conn = put("/posts/#{post.id}", %{"title" => "some value 9"})
 
     assert conn.status == 303
     assert Plug.Conn.get_resp_header(conn, "location") == ["/posts/#{post.id}"]
@@ -113,7 +108,7 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = put_page("/posts/#{post.id}", %{"title" => ""})
+    conn = put("/posts/#{post.id}", %{"title" => ""})
 
     assert conn.status == 200
     assert conn.resp_body =~ "can&#39;t be blank"
@@ -124,7 +119,7 @@ defmodule Fractal.Pages.PostsTest do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
 
-    conn = delete_page("/posts/#{post.id}")
+    conn = delete("/posts/#{post.id}")
 
     assert conn.status == 303
     assert Plug.Conn.get_resp_header(conn, "location") == ["/posts"]

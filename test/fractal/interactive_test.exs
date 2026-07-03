@@ -54,4 +54,11 @@ defmodule Fractal.InteractiveTest do
     assert js =~ "_fx_event"
     assert js =~ "fx-redirect"
   end
+
+  test "runtime_js sends the CSRF token from the layout's meta tag" do
+    js = runtime_js()
+
+    assert js =~ "fractal-csrf-token"
+    assert js =~ "_csrf_token"
+  end
 end

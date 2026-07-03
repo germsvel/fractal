@@ -142,8 +142,9 @@ All output goes through `Fractal.HTML`, so values are escaped. Field names are f
 `Ecto.Changeset.cast/4` expects from `assigns.params`. Errors render
 only after a failed `Repo.insert` (when the changeset has an `:action`).
 
-Known deferral: there are no sessions yet, so forms carry **no CSRF
-token**. Revisit when sessions land.
+Every form automatically carries a CSRF token, which is why forms must
+be built with these helpers — never hand-write a `<form>` tag (see
+`guides/sessions.md`).
 
 ## Dynamic routes
 
@@ -166,16 +167,17 @@ invalid (verification renders every page with empty params), e.g. a
 ## Testing data-backed pages
 
 Use the `Fractal.DataCase` template — each test gets a sandboxed,
-rolled-back DB connection and can run `async: true`:
+rolled-back DB connection and can run `async: true` — and drive pages
+through the router with the `Fractal.Test` helpers:
 
 ```elixir
 defmodule Fractal.Pages.PostsTest do
   use Fractal.DataCase, async: true
 
-  import Plug.Test
+  import Fractal.Test
 
   test "POST /posts creates and redirects" do
-    conn = :post |> conn("/posts", %{"title" => "Hi", "body" => "There"}) |> Fractal.Router.call([])
+    conn = post("/posts", %{"title" => "Hi", "body" => "There"})
     assert conn.status == 303
   end
 end

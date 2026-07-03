@@ -196,7 +196,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
       Enum.map_join(events, "\n", fn event ->
         """
           test "handles the #{event} event" do
-            conn = fire_event(#{inspect(event)}, %{})
+            conn = fire_event("#{route}", #{inspect(event)})
 
             assert conn.status == 200
             assert conn.resp_body =~ ~s(id="#{region}")
@@ -208,14 +208,9 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     defmodule #{module}Test do
       use ExUnit.Case, async: true
 
-      import Plug.Test
+      import Fractal.Test
 
-      alias Fractal.{HTML, Router}
-
-      defp fire_event(event, values) do
-        params = Map.merge(%{"_fx_path" => "#{route}", "_fx_event" => event}, values)
-        :post |> conn("/fractal/event", params) |> Router.call([])
-      end
+      alias Fractal.HTML
 
       test "passes Fractal's verification checks" do
         results = Fractal.Verify.run([#{module}])
@@ -224,7 +219,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
 
       test "renders its interactive region" do
         html =
-          %{params: %{}, path: "#{route}", conn: nil}
+          %{params: %{}, session: %{}, path: "#{route}", conn: nil}
           |> #{module}.render()
           |> HTML.to_safe()
           |> HTML.safe_to_string()
@@ -236,7 +231,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     #{String.trim_trailing(event_tests)}
 
       test "rejects events the page does not declare" do
-        conn = fire_event("bogus", %{})
+        conn = fire_event("#{route}", "bogus")
 
         assert conn.status == 404
       end

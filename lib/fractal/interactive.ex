@@ -105,6 +105,8 @@ defmodule Fractal.Interactive do
         var body = new URLSearchParams();
         body.set("_fx_path", window.location.pathname);
         body.set("_fx_event", el.getAttribute("data-fx-event"));
+        var csrf = document.querySelector('meta[name="fractal-csrf-token"]');
+        if (csrf) body.set("_csrf_token", csrf.getAttribute("content"));
         var values = el.getAttribute("data-fx-values");
         if (values) {
           var parsed = JSON.parse(values);

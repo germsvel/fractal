@@ -24,7 +24,10 @@ defmodule Mix.Tasks.Fractal.Verify do
     Mix.Task.run("compile", ["--warnings-as-errors"])
     Mix.Task.run("app.start", [])
 
-    results = [Fractal.Verify.pending_migrations() | Fractal.Verify.run()]
+    results = [
+      Fractal.Verify.secret_key(),
+      Fractal.Verify.pending_migrations() | Fractal.Verify.run()
+    ]
 
     Enum.each(results, fn
       {name, :ok} -> Mix.shell().info("✓ #{name}")

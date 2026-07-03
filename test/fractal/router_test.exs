@@ -3,14 +3,17 @@ defmodule Fractal.RouterTest do
   # posts pages
   use Fractal.DataCase, async: true
 
-  import Plug.Test
+  import Fractal.Test
+  import Plug.Test, only: [conn: 3]
 
   alias Fractal.Router
 
   @post_params %{"title" => "A title", "author" => "An author", "body" => "A body"}
 
-  defp get(path) do
-    :get |> conn(path) |> Router.call(Router.init([]))
+  # a request built without the Fractal.Test helpers: no test session,
+  # no CSRF exemption — what a real (or forged) client sends
+  defp raw(method, path, params) do
+    method |> conn(path, params) |> Router.call([])
   end
 
   defp insert_post! do
@@ -33,13 +36,13 @@ defmodule Fractal.RouterTest do
   end
 
   test "POST on an unknown path renders a 404" do
-    conn = :post |> conn("/nowhere", %{}) |> Router.call(Router.init([]))
+    conn = post("/nowhere")
 
     assert conn.status == 404
   end
 
   test "methods without a matching route render a 404" do
-    conn = :put |> conn("/") |> Router.call(Router.init([]))
+    conn = put("/")
 
     assert conn.status == 404
   end
@@ -57,13 +60,16 @@ defmodule Fractal.RouterTest do
     post = insert_post!()
 
     put_conn =
-      :put |> conn("/posts/#{post.id}", %{"title" => "via PUT"}) |> Router.call([])
+      put("/posts/#{post.id}", %{"title" => "via PUT"})
 
     assert put_conn.status == 303
     assert Repo.get!(Fractal.Post, post.id).title == "via PUT"
 
     patch_conn =
-      :patch |> conn("/posts/#{post.id}", %{"title" => "via PATCH"}) |> Router.call([])
+      :patch
+      |> conn("/posts/#{post.id}", %{"title" => "via PATCH"})
+      |> Plug.Conn.put_private(:plug_skip_csrf_protection, true)
+      |> Router.call([])
 
     assert patch_conn.status == 303
     assert Repo.get!(Fractal.Post, post.id).title == "via PATCH"
@@ -72,29 +78,18 @@ defmodule Fractal.RouterTest do
   test "a POST with a hidden _method field is rewritten before dispatch" do
     post = insert_post!()
 
-    conn =
-      :post
-      |> conn("/posts/#{post.id}", %{"_method" => "put", "title" => "via override"})
-      |> Router.call([])
+    conn = post("/posts/#{post.id}", %{"_method" => "put", "title" => "via override"})
 
     assert conn.status == 303
     assert Repo.get!(Fractal.Post, post.id).title == "via override"
 
-    delete_conn =
-      :post
-      |> conn("/posts/#{post.id}", %{"_method" => "delete"})
-      |> Router.call([])
+    delete_conn = post("/posts/#{post.id}", %{"_method" => "delete"})
 
     assert delete_conn.status == 303
     assert Repo.get(Fractal.Post, post.id) == nil
   end
 
   describe "POST /fractal/event" do
-    defp fire_event(path, event, values \\ %{}) do
-      params = Map.merge(%{"_fx_path" => path, "_fx_event" => event}, values)
-      :post |> conn("/fractal/event", params) |> Router.call([])
-    end
-
     test "dispatches to the page's handle_event/2 and returns the fragment" do
       conn = fire_event("/counter", "increment", %{"count" => "1"})
 
@@ -130,11 +125,61 @@ defmodule Fractal.RouterTest do
   test "native DELETE dispatches to the page's delete route" do
     post = insert_post!()
 
-    conn = :delete |> conn("/posts/#{post.id}") |> Router.call([])
+    conn = delete("/posts/#{post.id}")
 
     assert conn.status == 303
     assert Plug.Conn.get_resp_header(conn, "location") == ["/posts"]
     assert Repo.get(Fractal.Post, post.id) == nil
+  end
+
+  describe "CSRF protection" do
+    test "a state-changing request without a token is rejected with instructions" do
+      post = insert_post!()
+
+      conn = raw(:post, "/posts", @post_params)
+
+      assert conn.status == 403
+      assert conn.resp_body =~ "CSRF token missing or invalid"
+      assert conn.resp_body =~ "Fractal.Form"
+      assert conn.resp_body =~ "Fractal.Test"
+      # nothing was created or changed
+      assert Repo.aggregate(Fractal.Post, :count) == 1
+      assert Repo.get!(Fractal.Post, post.id).title == "A title"
+    end
+
+    test "a token-less event is rejected too" do
+      conn = raw(:post, "/fractal/event", %{"_fx_path" => "/counter", "_fx_event" => "increment"})
+
+      assert conn.status == 403
+      assert conn.resp_body =~ "CSRF token missing or invalid"
+    end
+
+    test "the real token round-trip works: page renders token, POST with it succeeds" do
+      get_conn = raw(:get, "/login", %{})
+
+      assert [token] =
+               Regex.run(~r/name="fractal-csrf-token" content="([^"]+)"/, get_conn.resp_body,
+                 capture: :all_but_first
+               )
+
+      assert [set_cookie | _] = Plug.Conn.get_resp_header(get_conn, "set-cookie")
+      cookie = set_cookie |> String.split(";") |> hd()
+
+      conn =
+        :post
+        |> conn("/login", %{"name" => "Ada", "_csrf_token" => token})
+        |> Plug.Conn.put_req_header("cookie", cookie)
+        |> Router.call([])
+
+      assert conn.status == 303
+    end
+
+    test "the session cookie is SameSite=Lax" do
+      get_conn = raw(:get, "/login", %{})
+
+      assert [set_cookie | _] = Plug.Conn.get_resp_header(get_conn, "set-cookie")
+      assert set_cookie =~ "SameSite=Lax"
+    end
   end
 
   test "GET on an unknown path renders a helpful 404" do

@@ -18,11 +18,14 @@ defmodule Fractal.Verify do
       handler (`handle_post/1`, `handle_put/1`, `handle_delete/1`)
     * declared events are unique non-empty strings and `handle_event/2`
       is exported when a page declares any
-    * every page's `render/1` runs without raising (with empty params)
-      and returns renderable content
+    * every page's `render/1` runs without raising (with empty params
+      and session) and returns renderable content
+    * every `<form>` a page renders carries a CSRF token (i.e. was
+      built with `Fractal.Form`, not by hand)
 
-  `pending_migrations/0` additionally checks the database is migrated;
-  `mix fractal.verify` runs it alongside these checks.
+  `pending_migrations/0` and `secret_key/0` additionally check the
+  database is migrated and the session secret is configured;
+  `mix fractal.verify` runs them alongside these checks.
   """
 
   alias Fractal.{HTML, Page, Router}
@@ -75,6 +78,34 @@ defmodule Fractal.Verify do
        {:error,
         "could not check migrations (is the database running? try `mix ecto.setup`): " <>
           Exception.message(exception)}}
+  end
+
+  @doc """
+  Checks that the session secret is configured and strong enough.
+
+  Sessions and CSRF tokens are encrypted/signed with
+  `config :fractal, :secret_key_base`.
+  """
+  @spec secret_key() :: result()
+  def secret_key do
+    name = "session secret is configured"
+
+    case Application.get_env(:fractal, :secret_key_base) do
+      nil ->
+        {name,
+         {:error,
+          "config :fractal, :secret_key_base is not set — generate one with " <>
+            "`mix fractal.gen.secret`"}}
+
+      secret when not is_binary(secret) or byte_size(secret) < 64 ->
+        {name,
+         {:error,
+          "secret_key_base must be a string of at least 64 bytes — generate one with " <>
+            "`mix fractal.gen.secret`"}}
+
+      _secret ->
+        {name, :ok}
+    end
   end
 
   defp check_pages_exist([]) do
@@ -187,20 +218,45 @@ defmodule Fractal.Verify do
   defp method_name(action), do: action |> to_string() |> String.upcase()
 
   defp validate_render(page) do
-    assigns = %{conn: nil, params: %{}, path: safe_route(page, & &1.path()) || "/"}
+    assigns = %{
+      conn: nil,
+      params: %{},
+      session: %{},
+      flash: %{},
+      path: safe_route(page, & &1.path()) || "/"
+    }
 
     case page.render(assigns) do
-      %HTML.Safe{} ->
-        :ok
+      %HTML.Safe{} = safe ->
+        scan_forms(HTML.safe_to_string(safe))
 
       content when is_binary(content) or is_list(content) ->
-        :ok
+        scan_forms(content |> HTML.to_safe() |> HTML.safe_to_string())
 
       other ->
         {:error, "render/1 must return Fractal.HTML content or a string, got: #{inspect(other)}"}
     end
   rescue
     exception -> {:error, "render/1 raised: #{Exception.message(exception)}"}
+  end
+
+  # every <form> must carry a CSRF token — i.e. be built with
+  # Fractal.Form, which injects one, rather than by hand
+  defp scan_forms(html) do
+    forms = count_occurrences(html, "<form")
+    tokens = count_occurrences(html, ~s(name="_csrf_token"))
+
+    if forms > tokens do
+      {:error,
+       "renders a <form> without a CSRF token — build forms with " <>
+         "Fractal.Form.form_for/4 or button_to/3 instead of raw <form> tags"}
+    else
+      :ok
+    end
+  end
+
+  defp count_occurrences(string, pattern) do
+    string |> String.split(pattern) |> length() |> Kernel.-(1)
   end
 
   defp safe_route(page, route_fun) do

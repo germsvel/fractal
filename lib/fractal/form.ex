@@ -22,7 +22,11 @@ defmodule Fractal.Form do
   `Repo.insert/1` and friends on failure), so a pristine form renders
   clean.
 
-  Note: Fractal does not have sessions yet, so forms carry no CSRF token.
+  Every form (and `button_to/3`) automatically carries a hidden
+  `_csrf_token`; the router rejects state-changing requests without one.
+  Pages never handle tokens themselves — which is why hand-written
+  `<form>` tags are not supported (and are flagged by
+  `mix fractal.verify`).
   """
 
   import Fractal.HTML
@@ -51,7 +55,7 @@ defmodule Fractal.Form do
     tag(
       :form,
       [action: action, method: "post"] ++ opts,
-      [method_field(method) | List.wrap(children)]
+      [csrf_field(), method_field(method) | List.wrap(children)]
     )
   end
 
@@ -67,9 +71,15 @@ defmodule Fractal.Form do
     {method, opts} = Keyword.pop(opts, :method, :post)
 
     tag(:form, [action: action, method: "post", class: "button-to"], [
+      csrf_field(),
       method_field(method),
       tag(:button, [type: "submit"] ++ opts, [label])
     ])
+  end
+
+  # every form carries the CSRF token; pages never handle it themselves
+  defp csrf_field do
+    tag(:input, type: "hidden", name: "_csrf_token", value: Plug.CSRFProtection.get_csrf_token())
   end
 
   defp method_field(:post), do: raw("")

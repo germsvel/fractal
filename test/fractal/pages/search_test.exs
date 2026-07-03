@@ -1,9 +1,9 @@
 defmodule Fractal.Pages.SearchTest do
   use Fractal.DataCase, async: true
 
-  import Plug.Test
+  import Fractal.Test
 
-  alias Fractal.{Repo, Router}
+  alias Fractal.Repo
 
   defp create_post!(title) do
     {:ok, post} =
@@ -19,8 +19,7 @@ defmodule Fractal.Pages.SearchTest do
   end
 
   defp search(query) do
-    params = %{"_fx_path" => "/search", "_fx_event" => "search", "q" => query}
-    :post |> conn("/fractal/event", params) |> Router.call([])
+    fire_event("/search", "search", %{"q" => query})
   end
 
   test "passes Fractal's verification checks" do
@@ -29,7 +28,7 @@ defmodule Fractal.Pages.SearchTest do
   end
 
   test "renders the search input wired to the results region" do
-    conn = :get |> conn("/search") |> Router.call([])
+    conn = get("/search")
 
     assert conn.status == 200
     assert conn.resp_body =~ ~s(data-fx-event="search")

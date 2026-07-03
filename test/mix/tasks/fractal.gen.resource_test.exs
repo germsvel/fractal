@@ -63,9 +63,10 @@ defmodule Mix.Tasks.Fractal.Gen.ResourceTest do
 
       tests = File.read!("test/fractal/pages/widgets_test.exs")
       assert tests =~ "use Fractal.DataCase, async: true"
-      assert tests =~ ~s[post_page("/widgets", @valid_params)]
-      assert tests =~ ~s[put_page("/widgets/]
-      assert tests =~ ~s[delete_page("/widgets/]
+      assert tests =~ "import Fractal.Test"
+      assert tests =~ ~s[post("/widgets", @valid_params)]
+      assert tests =~ ~s[put("/widgets/]
+      assert tests =~ ~s[delete("/widgets/]
       assert tests =~ "assert conn.status == 303"
     end)
   end

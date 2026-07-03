@@ -1,7 +1,8 @@
 defmodule Fractal.VerifyTest do
   # DataCase: discovered pages include database-backed ones, which render
-  # real queries during verification
-  use Fractal.DataCase, async: true
+  # real queries during verification. Not async: the secret_key test
+  # briefly mutates global config.
+  use Fractal.DataCase
 
   alias Fractal.Verify
 
@@ -92,6 +93,16 @@ defmodule Fractal.VerifyTest do
 
     @impl Fractal.Page
     def render(_assigns), do: "x"
+  end
+
+  # a page that builds its form by hand instead of with Fractal.Form
+  defmodule RawFormPage do
+    use Fractal.Page, path: "/verify-raw-form"
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      raw(~s(<form action="/x" method="post"><button>go</button></form>))
+    end
   end
 
   # declares events but bypasses the compile-time handle_event check
@@ -195,6 +206,35 @@ defmodule Fractal.VerifyTest do
 
   test "pending_migrations/0 passes on a migrated database" do
     assert {"migrations are up", :ok} = Verify.pending_migrations()
+  end
+
+  test "secret_key/0 passes with the configured secret and fails on weak or missing ones" do
+    assert {"session secret is configured", :ok} = Verify.secret_key()
+
+    original = Application.get_env(:fractal, :secret_key_base)
+    on_exit(fn -> Application.put_env(:fractal, :secret_key_base, original) end)
+
+    Application.put_env(:fractal, :secret_key_base, "too-short")
+    assert {_name, {:error, message}} = Verify.secret_key()
+    assert message =~ "at least 64 bytes"
+    assert message =~ "mix fractal.gen.secret"
+
+    Application.delete_env(:fractal, :secret_key_base)
+    assert {_name, {:error, message}} = Verify.secret_key()
+    assert message =~ "is not set"
+  end
+
+  test "detects a hand-rolled <form> without a CSRF token" do
+    results = Verify.run([RawFormPage])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "renders" and message =~ "without a CSRF token" and
+               message =~ "Fractal.Form"
+           end)
+
+    # forms built with Fractal.Form pass
+    assert Verify.ok?(Verify.run([Fractal.Pages.Login]))
   end
 
   test "detects a render that raises" do

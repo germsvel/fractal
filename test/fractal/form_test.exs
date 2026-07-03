@@ -21,6 +21,14 @@ defmodule Fractal.FormTest do
     refute html =~ "_method"
   end
 
+  test "every form carries a hidden CSRF token" do
+    form = render(form_for(changeset(), "/posts", [submit("Go")]))
+    button = render(button_to("Delete", "/posts/1", method: :delete))
+
+    assert form =~ ~s(type="hidden" name="_csrf_token" value=")
+    assert button =~ ~s(type="hidden" name="_csrf_token" value=")
+  end
+
   test "form_for/4 with method: :put emits a hidden _method field" do
     html = render(form_for(changeset(), "/posts/1", [method: :put], [submit("Save")]))
 

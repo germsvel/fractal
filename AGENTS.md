@@ -20,6 +20,16 @@ so purely with AI — so this file is the contract for how agents work here.
   `handle_event/2` returning `{:fragment, ...}`. State travels with the
   event (`values:`) or lives in the database — the server is stateless.
   See `guides/interactivity.md`. Never write `<script>` tags.
+- **Sessions are encrypted cookies**: read `assigns.session`
+  (string-keyed, like params); write via result directives —
+  `{:redirect, to, session: %{...}}`, `clear_session: true`,
+  `flash: %{"info" => "..."}` — never by touching a conn. Identity-scale
+  data only. See `guides/sessions.md`.
+- **CSRF is automatic and invisible**: `Fractal.Form` and the fx runtime
+  attach tokens; the router rejects requests without them. Never
+  hand-write `<form>` tags or `fetch` calls — verify flags them.
+- **Tests drive pages through `Fractal.Test`** (`get`, `post`,
+  `put`, `delete`, `fire_event`, all with a `session:` opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
   not hand-roll persistence.
 - `mix fractal.verify` is the feedback loop. A change is not done until
@@ -53,6 +63,7 @@ When asked to create or change a page or feature:
 | `mix fractal.gen.page Name --events a,b` | Scaffold an interactive page + tests |
 | `mix fractal.gen.resource Name field:type ...` | Scaffold schema + migration + form pages + tests |
 | `mix ecto.setup` / `mix ecto.migrate` | Create the database / run pending migrations |
+| `mix fractal.gen.secret` | Generate a session secret_key_base |
 | `mix fractal.verify` | Compile (warnings-as-errors) + migration check + page checks + tests |
 | `mix fractal.ai.docs` | Print the guides agents must read |
 | `mix test` | Run the test suite directly (creates/migrates the test DB) |

@@ -1,5 +1,10 @@
 import Config
 
+# Dev-only secret; generate your own with `mix fractal.gen.secret`
+config :fractal,
+  secret_key_base:
+    "udFfelu9J6Z55jb4PKiX4psEwr17A2I5YkFJoaAPtTIlUHeiAvgTmptrlnWqkRTYqz2zyA1ahiERumQOHMuiCg=="
+
 config :fractal, Fractal.Repo,
   username: System.get_env("PGUSER", "postgres"),
   password: System.get_env("PGPASSWORD", "postgres"),

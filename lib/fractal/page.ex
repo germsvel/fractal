@@ -78,6 +78,24 @@ defmodule Fractal.Page do
     * `{:render, extra_assigns}` — re-render this page's `render/1` with
       `extra_assigns` merged in (how validation errors round-trip)
 
+  ## Sessions
+
+  The session is an encrypted cookie — the server stays stateless.
+  Read it via `assigns.session` (a string-keyed map, like params).
+  Write it declaratively, by appending directives to any handler
+  result — never by touching the conn:
+
+      {:redirect, "/dashboard", session: %{"user_id" => user.id}}
+      {:redirect, "/", clear_session: true}                # logout
+      {:redirect, "/posts", flash: %{"info" => "Saved."}}  # one-shot banner
+
+  Directives: `session:` (map merged into the session),
+  `clear_session: true` (empties it first), and `flash:` (a map of
+  level → message the layout shows once on the next page load). They
+  compose with `{:render, ...}` and `{:fragment, ...}` too. Keep the
+  session for identity-scale data — it lives in a ~4KB cookie; app
+  state belongs in the database or in the DOM (event `values:`).
+
   Browsers only submit GET and POST forms, so PUT/PATCH/DELETE arrive as
   a POST carrying a hidden `_method` field — `Fractal.Form.form_for/4`
   with `method: :put` and `Fractal.Form.button_to/3` emit it, and the
@@ -90,10 +108,11 @@ defmodule Fractal.Page do
 
     * `:params` — merged path, query, and (for non-GET) body parameters,
       all string-keyed
+    * `:session` — the session, a string-keyed map
     * `:path` — the request path
     * `:conn` — the raw `Plug.Conn` (or `nil` outside a request, e.g.
-      during verification — `render/1` must not crash when params are
-      empty)
+      during verification — `render/1` must not crash when params and
+      session are empty)
 
   ## Interactive events
 

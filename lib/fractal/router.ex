@@ -14,6 +14,17 @@ defmodule Fractal.Router do
   compiled, which is what makes the development loop (agent writes a
   page → watcher recompiles → browser reloads) work without restarts.
 
+  ## Sessions and CSRF
+
+  Every page request runs through the session (an encrypted cookie —
+  the server stays stateless) and CSRF protection. Pages read
+  `assigns.session` and write it through result directives (see
+  `Fractal.Page`); the router applies those directives to the response.
+  State-changing requests (POST/PUT/PATCH/DELETE and interactive
+  events) must carry the CSRF token that `Fractal.Form` and the
+  interactivity runtime attach automatically — a request without one is
+  rejected with a 403 explaining the convention.
+
   Interactive events (see `Fractal.Interactive`) arrive as
   `POST /fractal/event` with `_fx_path` (the page's location) and
   `_fx_event`; the router dispatches them to the page's
@@ -34,8 +45,29 @@ defmodule Fractal.Router do
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
   @method_override_opts Plug.MethodOverride.init([])
+  @csrf_opts Plug.CSRFProtection.init([])
+  @session_opts Plug.Session.init(
+                  store: :cookie,
+                  key: "_fractal_session",
+                  encryption_salt: "fractal session encryption",
+                  signing_salt: "fractal session signing",
+                  same_site: "Lax"
+                )
 
   @methods %{"POST" => :post, "PUT" => :put, "PATCH" => :put, "DELETE" => :delete}
+
+  @flash_key "_fractal_flash"
+  @directives [:session, :clear_session, :flash]
+
+  @csrf_message """
+  CSRF token missing or invalid.
+
+  Fractal attaches CSRF tokens automatically — you never handle them
+  yourself. Build forms with Fractal.Form (form_for/4, button_to/3) and
+  interactions with trigger/3 or fx/2; hand-written <form> tags and raw
+  fetch calls are not supported. In tests, use the Fractal.Test helpers.
+  See `mix fractal.ai.docs` for the conventions.
+  """
 
   @impl Plug
   def init(opts), do: opts
@@ -48,14 +80,95 @@ defmodule Fractal.Router do
   end
 
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
-    case find_route(:get, conn.path_info) do
-      {page, path_params} -> render_page(conn, page, path_params)
-      nil -> not_found(conn, current_path(conn))
+    # the CSRF plug only seeds the token on GET (it can still reject
+    # cross-origin JavaScript requests)
+    case conn |> fetch_query_params() |> session_pipeline() do
+      {:ok, conn} ->
+        case find_route(:get, conn.path_info) do
+          {page, path_params} -> render_page(conn, page, path_params)
+          nil -> not_found(conn, current_path(conn))
+        end
+
+      {:forbidden, conn} ->
+        event_error(conn, 403, @csrf_message)
     end
   end
 
   def call(%Plug.Conn{method: "POST", path_info: ["fractal", "event"]} = conn, _opts) do
     conn = conn |> Plug.Parsers.call(@parsers_opts) |> fetch_query_params()
+
+    case session_pipeline(conn) do
+      {:ok, conn} -> dispatch_event(conn)
+      {:forbidden, conn} -> event_error(conn, 403, @csrf_message)
+    end
+  end
+
+  def call(%Plug.Conn{method: method} = conn, _opts)
+      when method in ["POST", "PUT", "PATCH", "DELETE"] do
+    # parse the body first: a POST may carry a hidden _method field that
+    # rewrites it to PUT/PATCH/DELETE
+    conn =
+      conn
+      |> Plug.Parsers.call(@parsers_opts)
+      |> Plug.MethodOverride.call(@method_override_opts)
+      |> fetch_query_params()
+
+    case session_pipeline(conn) do
+      {:ok, conn} ->
+        action = Map.fetch!(@methods, conn.method)
+
+        case find_route(action, conn.path_info) do
+          {page, path_params} -> handle_action(conn, page, action, path_params)
+          nil -> not_found(conn, current_path(conn))
+        end
+
+      {:forbidden, conn} ->
+        event_error(conn, 403, @csrf_message)
+    end
+  end
+
+  def call(conn, _opts), do: not_found(conn, current_path(conn))
+
+  @doc "All discovered page modules, sorted by path."
+  @spec pages() :: [module()]
+  def pages do
+    candidate_modules()
+    |> Enum.filter(&Page.page?/1)
+    |> Enum.sort_by(& &1.path())
+  end
+
+  # Session cookie + CSRF. Conns that already carry a session (from
+  # Plug.Test.init_test_session, via Fractal.Test) keep it; real requests
+  # get the encrypted cookie store.
+  defp session_pipeline(conn) do
+    conn =
+      if conn.private[:plug_session_fetch] do
+        conn
+      else
+        conn |> put_secret_key_base() |> Plug.Session.call(@session_opts)
+      end
+
+    {:ok, conn |> fetch_session() |> Plug.CSRFProtection.call(@csrf_opts)}
+  rescue
+    _exception in [
+      Plug.CSRFProtection.InvalidCSRFTokenError,
+      Plug.CSRFProtection.InvalidCrossOriginRequestError
+    ] ->
+      {:forbidden, conn}
+  end
+
+  defp put_secret_key_base(conn) do
+    case Application.get_env(:fractal, :secret_key_base) do
+      nil ->
+        raise "config :fractal, :secret_key_base is not set — sessions need it. " <>
+                "Generate one with `mix fractal.gen.secret` and add it to your config."
+
+      secret ->
+        %{conn | secret_key_base: secret}
+    end
+  end
+
+  defp dispatch_event(conn) do
     path = conn.params["_fx_path"] || ""
     event = conn.params["_fx_event"] || ""
     segments = path |> String.split("/") |> Enum.reject(&(&1 == ""))
@@ -76,34 +189,6 @@ defmodule Fractal.Router do
       nil ->
         event_error(conn, 404, "no page found at #{inspect(path)}")
     end
-  end
-
-  def call(%Plug.Conn{method: method} = conn, _opts)
-      when method in ["POST", "PUT", "PATCH", "DELETE"] do
-    # parse the body first: a POST may carry a hidden _method field that
-    # rewrites it to PUT/PATCH/DELETE
-    conn =
-      conn
-      |> Plug.Parsers.call(@parsers_opts)
-      |> Plug.MethodOverride.call(@method_override_opts)
-      |> fetch_query_params()
-
-    action = Map.fetch!(@methods, conn.method)
-
-    case find_route(action, conn.path_info) do
-      {page, path_params} -> handle_action(conn, page, action, path_params)
-      nil -> not_found(conn, current_path(conn))
-    end
-  end
-
-  def call(conn, _opts), do: not_found(conn, current_path(conn))
-
-  @doc "All discovered page modules, sorted by path."
-  @spec pages() :: [module()]
-  def pages do
-    candidate_modules()
-    |> Enum.filter(&Page.page?/1)
-    |> Enum.sort_by(& &1.path())
   end
 
   defp find_route(method, path_segments) do
@@ -130,8 +215,8 @@ defmodule Fractal.Router do
   defp current_path(conn), do: "/" <> Enum.join(conn.path_info, "/")
 
   defp render_page(conn, page, path_params) do
-    conn = fetch_query_params(conn)
-    assigns = build_assigns(conn, path_params)
+    {flash, conn} = pop_flash(conn)
+    assigns = conn |> build_assigns(path_params) |> Map.put(:flash, flash)
     html = Layout.render(page, assigns)
 
     conn
@@ -146,23 +231,20 @@ defmodule Fractal.Router do
   defp handle_action(conn, page, action, path_params) do
     assigns = build_assigns(conn, path_params)
 
-    case apply(page, :"handle_#{action}", [assigns]) do
-      {:redirect, to} when is_binary(to) ->
+    case normalize_result(page, "handle_#{action}/1", apply(page, :"handle_#{action}", [assigns])) do
+      {:redirect, to, directives} when is_binary(to) ->
         conn
+        |> apply_directives(directives)
         |> put_resp_header("location", to)
         |> send_resp(303, "")
 
-      {:render, extra_assigns} when is_map(extra_assigns) ->
+      {:render, extra_assigns, directives} when is_map(extra_assigns) ->
+        conn = apply_directives(conn, directives)
         html = Layout.render(page, Map.merge(assigns, extra_assigns))
 
         conn
         |> put_resp_content_type("text/html")
         |> send_resp(200, html)
-
-      other ->
-        raise ArgumentError,
-              "#{inspect(page)}.handle_#{action}/1 must return {:redirect, to} or " <>
-                "{:render, extra_assigns}, got: #{inspect(other)}"
     end
   rescue
     exception ->
@@ -176,23 +258,26 @@ defmodule Fractal.Router do
       |> Map.drop(["_fx_path", "_fx_event"])
       |> Map.merge(path_params)
 
-    assigns = %{conn: conn, params: params, path: conn.params["_fx_path"], event: event}
+    assigns = %{
+      conn: conn,
+      params: params,
+      path: conn.params["_fx_path"],
+      event: event,
+      session: page_session(conn)
+    }
 
-    case page.handle_event(event, assigns) do
-      {:fragment, content} ->
+    case normalize_result(page, "handle_event/2", page.handle_event(event, assigns)) do
+      {:fragment, content, directives} ->
         conn
+        |> apply_directives(directives)
         |> put_resp_content_type("text/html")
         |> send_resp(200, content |> HTML.to_safe() |> HTML.safe_to_string())
 
-      {:redirect, to} when is_binary(to) ->
+      {:redirect, to, directives} when is_binary(to) ->
         conn
+        |> apply_directives(directives)
         |> put_resp_header("fx-redirect", to)
         |> send_resp(204, "")
-
-      other ->
-        raise ArgumentError,
-              "#{inspect(page)}.handle_event/2 must return {:fragment, content} or " <>
-                "{:redirect, to}, got: #{inspect(other)}"
     end
   rescue
     exception ->
@@ -206,6 +291,67 @@ defmodule Fractal.Router do
       event_error(conn, 500, "#{inspect(page)} raised handling #{inspect(event)}#{detail}")
   end
 
+  # Handler results optionally carry response directives:
+  #   {:redirect, to, session: %{"user_id" => 1}}
+  #   {:redirect, to, clear_session: true}
+  #   {:render, extras, flash: %{"info" => "Saved."}}
+  defp normalize_result(_page, _fun, {:redirect, to}), do: {:redirect, to, []}
+  defp normalize_result(_page, _fun, {:render, extras}), do: {:render, extras, []}
+  defp normalize_result(_page, _fun, {:fragment, content}), do: {:fragment, content, []}
+
+  defp normalize_result(_page, _fun, {kind, payload, directives})
+       when kind in [:redirect, :render, :fragment] and is_list(directives) do
+    case Keyword.keys(directives) -- @directives do
+      [] ->
+        {kind, payload, directives}
+
+      unknown ->
+        raise ArgumentError,
+              "unknown result directive(s) #{inspect(unknown)} — supported directives are " <>
+                "#{inspect(@directives)}"
+    end
+  end
+
+  defp normalize_result(page, fun, other) do
+    raise ArgumentError,
+          "#{inspect(page)}.#{fun} must return {:redirect, to}, {:render, extra_assigns}, " <>
+            "or {:fragment, content} (events only), each optionally with directives " <>
+            "#{inspect(@directives)}, got: #{inspect(other)}"
+  end
+
+  defp apply_directives(conn, []), do: conn
+
+  defp apply_directives(conn, directives) do
+    # clear first, so session:/flash: in the same result write onto a
+    # blank session (a logout can still set a flash)
+    conn = if directives[:clear_session], do: clear_session(conn), else: conn
+
+    conn =
+      Enum.reduce(directives[:session] || %{}, conn, fn {key, value}, conn ->
+        put_session(conn, to_string(key), value)
+      end)
+
+    case directives[:flash] do
+      nil -> conn
+      flash -> put_session(conn, @flash_key, stringify(flash))
+    end
+  end
+
+  defp pop_flash(conn) do
+    case get_session(conn, @flash_key) do
+      nil -> {%{}, conn}
+      flash -> {flash, delete_session(conn, @flash_key)}
+    end
+  end
+
+  defp page_session(conn) do
+    conn |> get_session() |> Map.delete(@flash_key)
+  end
+
+  defp stringify(map) do
+    Map.new(map, fn {key, value} -> {to_string(key), to_string(value)} end)
+  end
+
   defp event_error(conn, status, message) do
     conn
     |> put_resp_content_type("text/plain")
@@ -213,7 +359,12 @@ defmodule Fractal.Router do
   end
 
   defp build_assigns(conn, path_params) do
-    %{conn: conn, params: Map.merge(conn.params, path_params), path: current_path(conn)}
+    %{
+      conn: conn,
+      params: Map.merge(conn.params, path_params),
+      path: current_path(conn),
+      session: page_session(conn)
+    }
   end
 
   defp render_error(conn, page, exception, stacktrace) do

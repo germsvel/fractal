@@ -84,14 +84,13 @@ clause per event, and tests that fire each event through the router.
 ## Testing interactivity
 
 Events go through `Fractal.Router` like any request — no browser
-needed:
+needed. Use the `Fractal.Test` helpers:
 
 ```elixir
+import Fractal.Test
+
 test "increment bumps the count" do
-  conn =
-    :post
-    |> conn("/fractal/event", %{"_fx_path" => "/counter", "_fx_event" => "increment", "count" => "0"})
-    |> Fractal.Router.call([])
+  conn = fire_event("/counter", "increment", %{"count" => "0"})
 
   assert conn.status == 200
   assert conn.resp_body =~ "Count: 1"
@@ -109,4 +108,7 @@ updated value). Undeclared events return 404; handler crashes return
   diffing, no streams. Keep regions small.
 - No WebSocket push yet; every update is user-initiated. The design
   leaves room for a push transport later without changing the page API.
-- Like forms, events carry no CSRF token until sessions exist.
+
+Events carry the CSRF token automatically (the runtime reads it from
+the layout's meta tag) — one more reason interactions must go through
+`fx/2`/`trigger/3` rather than hand-written `fetch` calls.

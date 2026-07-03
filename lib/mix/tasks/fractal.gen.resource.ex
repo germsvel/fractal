@@ -432,16 +432,11 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     defmodule Fractal.Pages.#{ctx.camel_plural}Test do
       use Fractal.DataCase, async: true
 
-      import Plug.Test
+      import Fractal.Test
 
-      alias Fractal.{Repo, Router}
+      alias Fractal.Repo
 
       @valid_params %{#{valid_params}}
-
-      defp get_page(path), do: :get |> conn(path) |> Router.call([])
-      defp post_page(path, params), do: :post |> conn(path, params) |> Router.call([])
-      defp put_page(path, params), do: :put |> conn(path, params) |> Router.call([])
-      defp delete_page(path), do: :delete |> conn(path) |> Router.call([])
 
       test "all #{ctx.human_downcase} pages pass Fractal's verification checks" do
         pages = [
@@ -459,14 +454,14 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         {:ok, _#{ctx.singular}} =
           Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
 
-        conn = get_page("#{ctx.route}")
+        conn = get("#{ctx.route}")
 
         assert conn.status == 200
         assert conn.resp_body =~ "#{first_value}"
       end
 
       test "GET #{ctx.route}/new shows the form" do
-        conn = get_page("#{ctx.route}/new")
+        conn = get("#{ctx.route}/new")
 
         assert conn.status == 200
         assert conn.resp_body =~ ~s(action="#{ctx.route}")
@@ -474,20 +469,20 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
       end
 
       test "POST #{ctx.route} with valid params creates and redirects to the new #{ctx.human_downcase}" do
-        conn = post_page("#{ctx.route}", @valid_params)
+        conn = post("#{ctx.route}", @valid_params)
 
         assert conn.status == 303
         [location] = Plug.Conn.get_resp_header(conn, "location")
         assert location =~ ~r{^#{ctx.route}/\\d+$}
 
-        shown = get_page(location)
+        shown = get(location)
         assert shown.status == 200
         assert shown.resp_body =~ "#{first_value}"
         assert shown.resp_body =~ ~s[name="_method" value="delete"], "show page has a delete button"
       end
 
       test "POST #{ctx.route} with invalid params re-renders the form with errors" do
-        conn = post_page("#{ctx.route}", %{})
+        conn = post("#{ctx.route}", %{})
 
         assert conn.status == 200
         assert conn.resp_body =~ "can&#39;t be blank"
@@ -495,7 +490,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
       end
 
       test "GET #{ctx.route}/:id for a missing #{ctx.human_downcase} renders not found" do
-        conn = get_page("#{ctx.route}/0")
+        conn = get("#{ctx.route}/0")
 
         assert conn.status == 200
         assert conn.resp_body =~ "not found"
@@ -505,7 +500,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         {:ok, #{ctx.singular}} =
           Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
 
-        conn = get_page("#{ctx.route}/\#{#{ctx.singular}.id}/edit")
+        conn = get("#{ctx.route}/\#{#{ctx.singular}.id}/edit")
 
         assert conn.status == 200
         assert conn.resp_body =~ ~s[action="#{ctx.route}/\#{#{ctx.singular}.id}"]
@@ -517,7 +512,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         {:ok, #{ctx.singular}} =
           Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
 
-        conn = put_page("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => "#{updated_value}"})
+        conn = put("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => "#{updated_value}"})
 
         assert conn.status == 303
         assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}/\#{#{ctx.singular}.id}"]
@@ -528,7 +523,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         {:ok, #{ctx.singular}} =
           Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
 
-        conn = put_page("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => ""})
+        conn = put("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => ""})
 
         assert conn.status == 200
         assert conn.resp_body =~ "can&#39;t be blank"
@@ -539,7 +534,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         {:ok, #{ctx.singular}} =
           Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
 
-        conn = delete_page("#{ctx.route}/\#{#{ctx.singular}.id}")
+        conn = delete("#{ctx.route}/\#{#{ctx.singular}.id}")
 
         assert conn.status == 303
         assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}"]

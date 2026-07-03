@@ -1,14 +1,9 @@
 defmodule Fractal.Pages.CounterTest do
   use ExUnit.Case, async: true
 
-  import Plug.Test
+  import Fractal.Test
 
-  alias Fractal.{HTML, Router}
-
-  defp fire_event(event, values) do
-    params = Map.merge(%{"_fx_path" => "/counter", "_fx_event" => event}, values)
-    :post |> conn("/fractal/event", params) |> Router.call([])
-  end
+  alias Fractal.HTML
 
   test "passes Fractal's verification checks" do
     results = Fractal.Verify.run([Fractal.Pages.Counter])
@@ -29,7 +24,7 @@ defmodule Fractal.Pages.CounterTest do
   end
 
   test "increment returns the region fragment with the next count" do
-    conn = fire_event("increment", %{"count" => "41"})
+    conn = fire_event("/counter", "increment", %{"count" => "41"})
 
     assert conn.status == 200
     assert conn.resp_body =~ "Count: </strong>42"
@@ -39,21 +34,21 @@ defmodule Fractal.Pages.CounterTest do
   end
 
   test "decrement goes below zero" do
-    conn = fire_event("decrement", %{"count" => "0"})
+    conn = fire_event("/counter", "decrement", %{"count" => "0"})
 
     assert conn.status == 200
     assert conn.resp_body =~ "Count: </strong>-1"
   end
 
   test "a garbled count falls back to zero" do
-    conn = fire_event("increment", %{"count" => "not-a-number"})
+    conn = fire_event("/counter", "increment", %{"count" => "not-a-number"})
 
     assert conn.status == 200
     assert conn.resp_body =~ "Count: </strong>1"
   end
 
   test "reset redirects the browser back to the page" do
-    conn = fire_event("reset", %{})
+    conn = fire_event("/counter", "reset")
 
     assert conn.status == 204
     assert Plug.Conn.get_resp_header(conn, "fx-redirect") == ["/counter"]

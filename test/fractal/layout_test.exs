@@ -23,6 +23,28 @@ defmodule Fractal.LayoutTest do
     assert Layout.shell("t", "b") =~ "data-fx-event"
   end
 
+  test "always includes the CSRF token meta tag" do
+    assert Layout.shell("t", "b") =~ ~s(<meta name="fractal-csrf-token" content=")
+  end
+
+  test "shows the signed-in bar only when the session has a user_name" do
+    html = Layout.shell("t", "b", session: %{"user_name" => "Ada"})
+    assert html =~ ~s(class="session-bar")
+    assert html =~ "Ada"
+    assert html =~ ~s(action="/logout")
+
+    refute Layout.shell("t", "b") =~ ~s(class="session-bar")
+    refute Layout.shell("t", "b", session: %{}) =~ ~s(class="session-bar")
+  end
+
+  test "renders flash banners, escaped" do
+    html = Layout.shell("t", "b", flash: %{"info" => "Saved <b>!</b>"})
+
+    assert html =~ ~s(class="flash flash-info")
+    assert html =~ "Saved &lt;b&gt;!&lt;/b&gt;"
+    refute Layout.shell("t", "b") =~ "class=\"flash"
+  end
+
   test "includes the live-reload script only when enabled" do
     original = Application.get_env(:fractal, :live_reload)
     on_exit(fn -> reset_env(original) end)
