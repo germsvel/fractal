@@ -6,21 +6,28 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
 
       mix fractal.gen.page About
       mix fractal.gen.page ContactUs --path /contact --title "Contact us"
+      mix fractal.gen.page Counter --events increment,decrement
 
   ## Options
 
     * `--path` — the route (default: derived from the name, e.g.
       `ContactUs` → `/contact-us`)
     * `--title` — the page title (default: humanized name)
+    * `--events` — comma-separated interactive events; generates a page
+      with an interactive region, a `handle_event/2` clause per event,
+      and tests that exercise each event through the router (see
+      `Fractal.Interactive`)
 
-  After generating, edit `render/1` and run `mix fractal.verify`.
+  After generating, edit `render/1` (and the event handlers) and run
+  `mix fractal.verify`.
   """
 
   use Mix.Task
 
   @impl Mix.Task
   def run(args) do
-    {opts, argv, _errors} = OptionParser.parse(args, strict: [path: :string, title: :string])
+    {opts, argv, _errors} =
+      OptionParser.parse(args, strict: [path: :string, title: :string, events: :string])
 
     name =
       case argv do
@@ -28,7 +35,10 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
           name
 
         [] ->
-          Mix.raise("usage: mix fractal.gen.page PageName [--path /route] [--title \"Title\"]")
+          Mix.raise(
+            "usage: mix fractal.gen.page PageName [--path /route] [--title \"Title\"] " <>
+              "[--events a,b]"
+          )
       end
 
     module_suffix = Macro.camelize(name)
@@ -36,6 +46,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     module = "Fractal.Pages.#{module_suffix}"
     route = opts[:path] || "/" <> String.replace(file_base, "_", "-")
     title = opts[:title] || humanize(file_base)
+    events = parse_events(opts[:events])
 
     page_file = Path.join(["lib", "fractal", "pages", "#{file_base}.ex"])
     test_file = Path.join(["test", "fractal", "pages", "#{file_base}_test.exs"])
@@ -44,10 +55,22 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
       if File.exists?(file), do: Mix.raise("#{file} already exists")
     end)
 
+    {page_contents, test_contents} =
+      case events do
+        [] ->
+          {page_template(module, route, title), test_template(module, route, title)}
+
+        events ->
+          region = String.replace(file_base, "_", "-") <> "-region"
+
+          {interactive_page_template(module, route, title, events, region),
+           interactive_test_template(module, route, title, events, region)}
+      end
+
     File.mkdir_p!(Path.dirname(page_file))
     File.mkdir_p!(Path.dirname(test_file))
-    File.write!(page_file, page_template(module, route, title))
-    File.write!(test_file, test_template(module, route, title))
+    File.write!(page_file, page_contents)
+    File.write!(test_file, test_contents)
 
     Mix.shell().info("""
     * created #{page_file}
@@ -55,6 +78,18 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
 
     Edit render/1 to build the page, then run `mix fractal.verify`.
     """)
+  end
+
+  defp parse_events(nil), do: []
+
+  defp parse_events(events) do
+    events = events |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+    if events == [] or Enum.uniq(events) != events or Enum.any?(events, &(&1 == "")) do
+      Mix.raise("--events must be a comma-separated list of unique event names")
+    end
+
+    events
   end
 
   defp humanize(file_base) do
@@ -103,6 +138,107 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
           |> HTML.safe_to_string()
 
         assert html =~ "#{title}"
+      end
+    end
+    """
+  end
+
+  defp interactive_page_template(module, route, title, events, region) do
+    events_list = Enum.map_join(events, ", ", &inspect/1)
+
+    handlers =
+      Enum.map_join(events, "\n", fn event ->
+        """
+          def handle_event(#{inspect(event)}, assigns) do
+            # TODO: compute the new state from assigns.params
+            {:fragment, region(assigns.params)}
+          end
+        """
+      end)
+
+    triggers =
+      Enum.map_join(events, ",\n          \" \",\n", fn event ->
+        ~s{          trigger("#{humanize(event)}", #{inspect(event)}, target: "##{region}")}
+      end)
+
+    """
+    defmodule #{module} do
+      @moduledoc "The #{title} page, served at #{route} — interactive, see Fractal.Interactive."
+
+      use Fractal.Page, path: "#{route}", title: "#{title}", events: [#{events_list}]
+
+      @impl Fractal.Page
+      def render(_assigns) do
+        tag(:section, [], [
+          tag(:h1, [], ["#{title}"]),
+          region(%{})
+        ])
+      end
+
+      @impl Fractal.Page
+    #{String.trim_trailing(handlers)}
+
+      # The interactive region: re-rendered whole on every event. Keep
+      # state in the params each trigger sends (values:) or in the
+      # database.
+      defp region(params) do
+        tag(:div, [id: "#{region}"], [
+          tag(:p, [], ["Last event params: ", inspect(params)]),
+    #{triggers}
+        ])
+      end
+    end
+    """
+  end
+
+  defp interactive_test_template(module, route, title, events, region) do
+    event_tests =
+      Enum.map_join(events, "\n", fn event ->
+        """
+          test "handles the #{event} event" do
+            conn = fire_event(#{inspect(event)}, %{})
+
+            assert conn.status == 200
+            assert conn.resp_body =~ ~s(id="#{region}")
+          end
+        """
+      end)
+
+    """
+    defmodule #{module}Test do
+      use ExUnit.Case, async: true
+
+      import Plug.Test
+
+      alias Fractal.{HTML, Router}
+
+      defp fire_event(event, values) do
+        params = Map.merge(%{"_fx_path" => "#{route}", "_fx_event" => event}, values)
+        :post |> conn("/fractal/event", params) |> Router.call([])
+      end
+
+      test "passes Fractal's verification checks" do
+        results = Fractal.Verify.run([#{module}])
+        assert Fractal.Verify.ok?(results), inspect(Fractal.Verify.errors(results))
+      end
+
+      test "renders its interactive region" do
+        html =
+          %{params: %{}, path: "#{route}", conn: nil}
+          |> #{module}.render()
+          |> HTML.to_safe()
+          |> HTML.safe_to_string()
+
+        assert html =~ "#{title}"
+        assert html =~ ~s(id="#{region}")
+      end
+
+    #{String.trim_trailing(event_tests)}
+
+      test "rejects events the page does not declare" do
+        conn = fire_event("bogus", %{})
+
+        assert conn.status == 404
       end
     end
     """

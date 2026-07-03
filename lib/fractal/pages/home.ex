@@ -27,7 +27,9 @@ defmodule Fractal.Pages.Home do
         ]),
         tag(:li, [], [
           tag(:code, [], ["mix fractal.gen.page Name"]),
-          " — scaffold a page and its test"
+          " — scaffold a page and its test (add ",
+          tag(:code, [], ["--events a,b"]),
+          " for an interactive one)"
         ]),
         tag(:li, [], [
           tag(:code, [], ["mix fractal.gen.resource Name field:type"]),

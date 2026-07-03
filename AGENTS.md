@@ -15,6 +15,11 @@ so purely with AI — so this file is the contract for how agents work here.
   page. Keep it that way — do not add controllers.
 - HTML is built with `Fractal.HTML.tag/3` — escaped by default, `raw/1`
   is the only escape hatch. Forms use `Fractal.Form`.
+- **Interactivity needs no JavaScript**: declare `events:` on the page,
+  wire elements with `trigger/3` or `fx/2`, handle them in
+  `handle_event/2` returning `{:fragment, ...}`. State travels with the
+  event (`values:`) or lives in the database — the server is stateless.
+  See `guides/interactivity.md`. Never write `<script>` tags.
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
   not hand-roll persistence.
 - `mix fractal.verify` is the feedback loop. A change is not done until
@@ -45,6 +50,7 @@ When asked to create or change a page or feature:
 | --- | --- |
 | `mix fractal.server` | Start the dev server on port 4000 (live reload on) |
 | `mix fractal.gen.page Name` | Scaffold a static page + test |
+| `mix fractal.gen.page Name --events a,b` | Scaffold an interactive page + tests |
 | `mix fractal.gen.resource Name field:type ...` | Scaffold schema + migration + form pages + tests |
 | `mix ecto.setup` / `mix ecto.migrate` | Create the database / run pending migrations |
 | `mix fractal.verify` | Compile (warnings-as-errors) + migration check + page checks + tests |

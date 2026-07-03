@@ -47,16 +47,19 @@ defmodule Mix.Tasks.Fractal.Gen.ResourceTest do
       assert new_page =~ "checkbox(changeset, :published)"
 
       show = File.read!("lib/fractal/pages/widget.ex")
-      assert show =~ ~s[use Fractal.Page, path: "/widgets/:id", title: "Widget"]
+
+      assert show =~
+               ~s[use Fractal.Page, path: "/widgets/:id", title: "Widget", delete: "/widgets/:id"]
+
       assert show =~ ~s[/edit"], "show page links to the edit page"
+      assert show =~ "def handle_delete(assigns) do"
+      assert show =~ ~s[button_to("Delete widget"]
 
       edit = File.read!("lib/fractal/pages/edit_widget.ex")
       assert edit =~ ~s[path: "/widgets/:id/edit"]
       assert edit =~ ~s[put: "/widgets/:id"]
-      assert edit =~ ~s[delete: "/widgets/:id"]
       assert edit =~ "def handle_put(assigns) do"
-      assert edit =~ "def handle_delete(assigns) do"
-      assert edit =~ ~s[button_to("Delete widget"]
+      refute edit =~ "handle_delete", "delete lives on the show page"
 
       tests = File.read!("test/fractal/pages/widgets_test.exs")
       assert tests =~ "use Fractal.DataCase, async: true"

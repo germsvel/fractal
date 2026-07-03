@@ -16,6 +16,8 @@ defmodule Fractal.Verify do
       a non-empty title
     * every declared action route (`post:`, `put:`, `delete:`) has its
       handler (`handle_post/1`, `handle_put/1`, `handle_delete/1`)
+    * declared events are unique non-empty strings and `handle_event/2`
+      is exported when a page declares any
     * every page's `render/1` runs without raising (with empty params)
       and returns renderable content
 
@@ -111,7 +113,12 @@ defmodule Fractal.Verify do
     [
       {"#{inspect(page)} declares a valid path", validate_path(page)},
       {"#{inspect(page)} declares a valid title", validate_title(page)}
-    ] ++ action_checks ++ [{"#{inspect(page)} renders", validate_render(page)}]
+    ] ++
+      action_checks ++
+      [
+        {"#{inspect(page)} handles its events", validate_events(page)},
+        {"#{inspect(page)} renders", validate_render(page)}
+      ]
   end
 
   defp validate_path(page) do
@@ -158,6 +165,23 @@ defmodule Fractal.Verify do
     end
   rescue
     exception -> {:error, "#{action}_path/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_events(page) do
+    events = Page.events(page)
+
+    cond do
+      not Page.valid_events?(events) ->
+        {:error, "invalid events #{inspect(events)} — must be unique, non-empty strings"}
+
+      events != [] and not function_exported?(page, :handle_event, 2) ->
+        {:error, "declares events #{inspect(events)} but does not export handle_event/2"}
+
+      true ->
+        :ok
+    end
+  rescue
+    exception -> {:error, "events/0 raised: #{Exception.message(exception)}"}
   end
 
   defp method_name(action), do: action |> to_string() |> String.upcase()

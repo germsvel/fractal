@@ -81,6 +81,7 @@ defmodule Fractal.Layout do
       "</style>\n</head>\n<body>\n<main>",
       HTML.to_safe(body).content,
       "</main>\n",
+      Fractal.Interactive.runtime_js(),
       live_reload_script(),
       "</body>\n</html>\n"
     ])

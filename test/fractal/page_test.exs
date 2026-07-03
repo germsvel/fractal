@@ -157,6 +157,84 @@ defmodule Fractal.PageTest do
     assert Exception.message(error) =~ "does not define handle_post/1"
   end
 
+  defmodule WithEvents do
+    use Fractal.Page, path: "/with-events", events: ["ping"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:p, [], ["interactive"])
+
+    @impl Fractal.Page
+    def handle_event("ping", _assigns), do: {:fragment, tag(:p, [], ["pong"])}
+  end
+
+  test "events/0 defaults to [] and reflects the :events option" do
+    assert Sample.events() == []
+    assert WithEvents.events() == ["ping"]
+    assert Fractal.Page.events(WithEvents) == ["ping"]
+    assert Fractal.Page.events(Sample) == []
+  end
+
+  test "declaring events: without handle_event/2 fails to compile" do
+    error =
+      try do
+        defmodule EventsNoHandler do
+          use Fractal.Page, path: "/enh", events: ["ping"]
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not define handle_event/2"
+  end
+
+  test "defining handle_event/2 without events: fails to compile" do
+    error =
+      try do
+        defmodule HandlerNoEvents do
+          use Fractal.Page, path: "/hne"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_event(_event, _assigns), do: {:fragment, "x"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not declare its"
+  end
+
+  test "duplicate or blank events fail to compile" do
+    error =
+      try do
+        defmodule DupEvents do
+          use Fractal.Page, path: "/dup-events", events: ["a", "a"]
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_event(_event, _assigns), do: {:fragment, "x"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "invalid events"
+  end
+
   test "declaring put: without handle_put/1 fails to compile" do
     error =
       try do

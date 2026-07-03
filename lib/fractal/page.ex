@@ -33,10 +33,13 @@ defmodule Fractal.Page do
     * `:put` (optional) — an update route handled by `handle_put/1`.
       Matches both PUT and PATCH requests.
     * `:delete` (optional) — a destroy route handled by `handle_delete/1`.
+    * `:events` (optional) — the interactive events this page handles
+      with `handle_event/2`. See `Fractal.Interactive`.
 
   Each action option keeps a form and the action it submits to in one
   file. Declaring an action route without defining its handler (or vice
-  versa) is a compile-time error.
+  versa) is a compile-time error — the same goes for `:events` and
+  `handle_event/2`.
 
   ## Form submissions
 
@@ -92,8 +95,17 @@ defmodule Fractal.Page do
       during verification — `render/1` must not crash when params are
       empty)
 
-  `use Fractal.Page` imports `Fractal.HTML`, so `tag/3`, `raw/1`, and
-  friends are available directly.
+  ## Interactive events
+
+  Pages declare interactive events with `events:` and handle them with
+  `handle_event/2`, which receives the event name and the usual assigns
+  and returns `{:fragment, content}` (swapped into the trigger's target
+  element) or `{:redirect, to}` (the browser navigates). See
+  `Fractal.Interactive` for the full model.
+
+  `use Fractal.Page` imports `Fractal.HTML` and `Fractal.Interactive`,
+  so `tag/3`, `raw/1`, `fx/2`, `trigger/3`, and friends are available
+  directly.
   """
 
   @callback path() :: String.t()
@@ -101,17 +113,22 @@ defmodule Fractal.Page do
   @callback post_path() :: String.t() | nil
   @callback put_path() :: String.t() | nil
   @callback delete_path() :: String.t() | nil
+  @callback events() :: [String.t()]
   @callback render(assigns :: map()) :: Fractal.HTML.Safe.t() | iodata()
   @callback handle_post(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_put(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_delete(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
+  @callback handle_event(event :: String.t(), assigns :: map()) ::
+              {:fragment, Fractal.HTML.Safe.t() | iodata()} | {:redirect, String.t()}
 
   @optional_callbacks post_path: 0,
                       put_path: 0,
                       delete_path: 0,
+                      events: 0,
                       handle_post: 1,
                       handle_put: 1,
-                      handle_delete: 1
+                      handle_delete: 1,
+                      handle_event: 2
 
   @actions [:post, :put, :delete]
 
@@ -119,12 +136,14 @@ defmodule Fractal.Page do
     quote bind_quoted: [opts: opts] do
       @behaviour Fractal.Page
       import Fractal.HTML
+      import Fractal.Interactive
 
       @fractal_page_path Keyword.get(opts, :path)
       @fractal_page_title Keyword.get(opts, :title)
       @fractal_page_post Keyword.get(opts, :post)
       @fractal_page_put Keyword.get(opts, :put)
       @fractal_page_delete Keyword.get(opts, :delete)
+      @fractal_page_events Keyword.get(opts, :events, [])
       @before_compile Fractal.Page
     end
   end
@@ -137,6 +156,8 @@ defmodule Fractal.Page do
       for action <- @actions do
         {action, Module.get_attribute(env.module, :"fractal_page_#{action}")}
       end
+
+    events = Module.get_attribute(env.module, :fractal_page_events)
 
     validate_path!(env.module, path)
 
@@ -151,14 +172,19 @@ defmodule Fractal.Page do
       )
     end
 
+    validate_events!(env.module, events, Module.defines?(env.module, {:handle_event, 2}))
+
     title = title || default_title(env.module)
 
-    quote bind_quoted: [path: path, title: title, actions: actions] do
+    quote bind_quoted: [path: path, title: title, actions: actions, events: events] do
       @impl Fractal.Page
       def path, do: unquote(path)
 
       @impl Fractal.Page
       def title, do: unquote(title)
+
+      @impl Fractal.Page
+      def events, do: unquote(events)
 
       for {action, route} <- actions do
         @impl Fractal.Page
@@ -213,6 +239,43 @@ defmodule Fractal.Page do
       true ->
         :ok
     end
+  end
+
+  @doc false
+  def validate_events!(module, events, defines_handler?) do
+    cond do
+      not valid_events?(events) ->
+        raise ArgumentError,
+              "#{inspect(module)} has invalid events #{inspect(events)} — " <>
+                "events must be a list of unique, non-empty strings"
+
+      events != [] and not defines_handler? ->
+        raise ArgumentError,
+              "#{inspect(module)} declares events: #{inspect(events)} but does not " <>
+                "define handle_event/2"
+
+      events == [] and defines_handler? ->
+        raise ArgumentError,
+              "#{inspect(module)} defines handle_event/2 but does not declare its " <>
+                "events: use Fractal.Page, path: ..., events: [\"example\"]"
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc "Returns `true` if `events` is a valid event declaration."
+  @spec valid_events?(term()) :: boolean()
+  def valid_events?(events) do
+    is_list(events) and
+      Enum.all?(events, &(is_binary(&1) and &1 != "")) and
+      Enum.uniq(events) == events
+  end
+
+  @doc "Returns the events `module` declares (works for any page)."
+  @spec events(module()) :: [String.t()]
+  def events(module) do
+    if function_exported?(module, :events, 0), do: module.events(), else: []
   end
 
   @doc "Returns `true` if `route` is a well-formed route pattern."

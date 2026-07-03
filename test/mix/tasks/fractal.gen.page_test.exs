@@ -36,6 +36,34 @@ defmodule Mix.Tasks.Fractal.Gen.PageTest do
   end
 
   @tag :tmp_dir
+  test "generates an interactive page with --events", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      Mix.Tasks.Fractal.Gen.Page.run(["LiveDemo", "--events", "refresh,clear"])
+
+      page = File.read!("lib/fractal/pages/live_demo.ex")
+
+      assert page =~
+               ~s{use Fractal.Page, path: "/live-demo", title: "Live demo", events: ["refresh", "clear"]}
+
+      assert page =~ ~s[def handle_event("refresh", assigns) do]
+      assert page =~ ~s[def handle_event("clear", assigns) do]
+      assert page =~ ~s[id: "live-demo-region"]
+      assert page =~ ~s[trigger("Refresh", "refresh", target: "#live-demo-region")]
+
+      tests = File.read!("test/fractal/pages/live_demo_test.exs")
+      assert tests =~ ~s[fire_event("refresh", %{})]
+      assert tests =~ ~s[fire_event("clear", %{})]
+      assert tests =~ "rejects events the page does not declare"
+    end)
+  end
+
+  test "rejects malformed --events" do
+    assert_raise Mix.Error, ~r/--events/, fn ->
+      Mix.Tasks.Fractal.Gen.Page.run(["Bad", "--events", "a,a"])
+    end
+  end
+
+  @tag :tmp_dir
   test "refuses to overwrite an existing page", %{tmp_dir: tmp_dir} do
     File.cd!(tmp_dir, fn ->
       Mix.Tasks.Fractal.Gen.Page.run(["About"])

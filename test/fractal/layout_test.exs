@@ -18,6 +18,11 @@ defmodule Fractal.LayoutTest do
     assert html =~ "AI-first web framework"
   end
 
+  test "always includes the interactivity runtime" do
+    assert Layout.shell("t", "b") =~ "/fractal/event"
+    assert Layout.shell("t", "b") =~ "data-fx-event"
+  end
+
   test "includes the live-reload script only when enabled" do
     original = Application.get_env(:fractal, :live_reload)
     on_exit(fn -> reset_env(original) end)

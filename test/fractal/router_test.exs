@@ -89,6 +89,44 @@ defmodule Fractal.RouterTest do
     assert Repo.get(Fractal.Post, post.id) == nil
   end
 
+  describe "POST /fractal/event" do
+    defp fire_event(path, event, values \\ %{}) do
+      params = Map.merge(%{"_fx_path" => path, "_fx_event" => event}, values)
+      :post |> conn("/fractal/event", params) |> Router.call([])
+    end
+
+    test "dispatches to the page's handle_event/2 and returns the fragment" do
+      conn = fire_event("/counter", "increment", %{"count" => "1"})
+
+      assert conn.status == 200
+      assert {"content-type", "text/html; charset=utf-8"} in conn.resp_headers
+      assert conn.resp_body =~ "Count: </strong>2"
+      refute conn.resp_body =~ "<html"
+    end
+
+    test "supports {:redirect, to} via the fx-redirect header" do
+      conn = fire_event("/counter", "reset")
+
+      assert conn.status == 204
+      assert Plug.Conn.get_resp_header(conn, "fx-redirect") == ["/counter"]
+    end
+
+    test "rejects events the page does not declare, naming the declared ones" do
+      conn = fire_event("/counter", "explode")
+
+      assert conn.status == 404
+      assert conn.resp_body =~ ~s("explode")
+      assert conn.resp_body =~ "increment"
+    end
+
+    test "rejects events for paths with no page" do
+      conn = fire_event("/nowhere", "increment")
+
+      assert conn.status == 404
+      assert conn.resp_body =~ "no page found"
+    end
+  end
+
   test "native DELETE dispatches to the page's delete route" do
     post = insert_post!()
 

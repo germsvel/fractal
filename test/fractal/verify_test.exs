@@ -94,6 +94,23 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: "x"
   end
 
+  # declares events but bypasses the compile-time handle_event check
+  defmodule SneakyEvents do
+    @behaviour Fractal.Page
+
+    @impl Fractal.Page
+    def path, do: "/verify-sneaky-events"
+
+    @impl Fractal.Page
+    def title, do: "Sneaky events"
+
+    @impl Fractal.Page
+    def events, do: ["ping"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
   # declares a post route but bypasses the compile-time handle_post check
   defmodule SneakyPost do
     @behaviour Fractal.Page
@@ -164,6 +181,15 @@ defmodule Fractal.VerifyTest do
 
     assert Enum.any?(errors, fn {name, {:error, message}} ->
              name =~ "handles its delete route" and message =~ "does not export handle_delete/1"
+           end)
+  end
+
+  test "detects declared events without handle_event/2" do
+    results = Verify.run([SneakyEvents])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "handles its events" and message =~ "does not export handle_event/2"
            end)
   end
 

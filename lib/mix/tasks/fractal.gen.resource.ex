@@ -13,10 +13,10 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     * `lib/fractal/pages/posts.ex` — index page at `/posts`
     * `lib/fractal/pages/new_post.ex` — form at `/posts/new`, handling
       `POST /posts` in the same file
-    * `lib/fractal/pages/post.ex` — show page at `/posts/:id`
-    * `lib/fractal/pages/edit_post.ex` — edit form and delete button at
-      `/posts/:id/edit`, handling `PUT /posts/:id` and
-      `DELETE /posts/:id` in the same file
+    * `lib/fractal/pages/post.ex` — show page at `/posts/:id`, with the
+      delete button, handling `DELETE /posts/:id` in the same file
+    * `lib/fractal/pages/edit_post.ex` — edit form at `/posts/:id/edit`,
+      handling `PUT /posts/:id` in the same file
     * `test/fractal/pages/posts_test.exs` — tests for all four pages
 
   Supported field types: `string`, `text`, `integer`, `float`, `boolean`,
@@ -295,9 +295,11 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
     """
     defmodule Fractal.Pages.#{ctx.camel} do
-      @moduledoc "Shows a single #{ctx.human_downcase}, served at #{ctx.route}/:id."
+      @moduledoc "Shows a single #{ctx.human_downcase}, served at #{ctx.route}/:id; handles DELETE #{ctx.route}/:id in this same file."
 
-      use Fractal.Page, path: "#{ctx.route}/:id", title: "#{ctx.human}"
+      use Fractal.Page, path: "#{ctx.route}/:id", title: "#{ctx.human}", delete: "#{ctx.route}/:id"
+
+      import Fractal.Form
 
       alias Fractal.Repo
 
@@ -317,8 +319,23 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
                 tag(:a, [href: "#{ctx.route}/\#{#{ctx.singular}.id}/edit"], ["Edit"]),
                 " · ",
                 tag(:a, [href: "#{ctx.route}"], ["Back to #{ctx.plural}"])
+              ]),
+              tag(:p, [], [
+                button_to("Delete #{ctx.human_downcase}", "#{ctx.route}/\#{#{ctx.singular}.id}", method: :delete)
               ])
             ])
+        end
+      end
+
+      @impl Fractal.Page
+      def handle_delete(assigns) do
+        case fetch(assigns.params["id"]) do
+          nil ->
+            {:redirect, "#{ctx.route}"}
+
+          #{ctx.singular} ->
+            Repo.delete!(#{ctx.singular})
+            {:redirect, "#{ctx.route}"}
         end
       end
 
@@ -339,13 +356,12 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
     """
     defmodule Fractal.Pages.Edit#{ctx.camel} do
-      @moduledoc "Form to edit a #{ctx.human_downcase}; handles PUT and DELETE #{ctx.route}/:id in this same file."
+      @moduledoc "Form to edit a #{ctx.human_downcase}; handles PUT #{ctx.route}/:id in this same file."
 
       use Fractal.Page,
         path: "#{ctx.route}/:id/edit",
         title: "Edit #{ctx.human_downcase}",
-        put: "#{ctx.route}/:id",
-        delete: "#{ctx.route}/:id"
+        put: "#{ctx.route}/:id"
 
       import Fractal.Form
 
@@ -369,9 +385,6 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
                 #{form_fields},
                 submit("Save #{ctx.human_downcase}")
               ]),
-              tag(:p, [], [
-                button_to("Delete #{ctx.human_downcase}", "#{ctx.route}/\#{#{ctx.singular}.id}", method: :delete)
-              ]),
               tag(:p, [], [tag(:a, [href: "#{ctx.route}/\#{#{ctx.singular}.id}"], ["Back to #{ctx.human_downcase}"])])
             ])
         end
@@ -388,18 +401,6 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
               {:ok, #{ctx.singular}} -> {:redirect, "#{ctx.route}/\#{#{ctx.singular}.id}"}
               {:error, changeset} -> {:render, %{changeset: changeset}}
             end
-        end
-      end
-
-      @impl Fractal.Page
-      def handle_delete(assigns) do
-        case fetch(assigns.params["id"]) do
-          nil ->
-            {:redirect, "#{ctx.route}"}
-
-          #{ctx.singular} ->
-            Repo.delete!(#{ctx.singular})
-            {:redirect, "#{ctx.route}"}
         end
       end
 
@@ -482,6 +483,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         shown = get_page(location)
         assert shown.status == 200
         assert shown.resp_body =~ "#{first_value}"
+        assert shown.resp_body =~ ~s[name="_method" value="delete"], "show page has a delete button"
       end
 
       test "POST #{ctx.route} with invalid params re-renders the form with errors" do
@@ -508,7 +510,6 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         assert conn.status == 200
         assert conn.resp_body =~ ~s[action="#{ctx.route}/\#{#{ctx.singular}.id}"]
         assert conn.resp_body =~ ~s[name="_method" value="put"]
-        assert conn.resp_body =~ ~s[name="_method" value="delete"]
         assert conn.resp_body =~ "#{first_value}"
       end
 

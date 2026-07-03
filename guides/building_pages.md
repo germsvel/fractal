@@ -38,6 +38,8 @@ Rules:
 - Pages handle form submissions in the same file via the `:post`,
   `:put`, and `:delete` options and their `handle_*/1` callbacks — see
   `guides/forms_and_data.md`.
+- Pages handle interactivity in the same file too, via `events:` and
+  `handle_event/2` — no JavaScript — see `guides/interactivity.md`.
 
 ## Rendering HTML
 

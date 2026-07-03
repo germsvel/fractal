@@ -14,6 +14,12 @@ defmodule Fractal.Router do
   compiled, which is what makes the development loop (agent writes a
   page → watcher recompiles → browser reloads) work without restarts.
 
+  Interactive events (see `Fractal.Interactive`) arrive as
+  `POST /fractal/event` with `_fx_path` (the page's location) and
+  `_fx_event`; the router dispatches them to the page's
+  `handle_event/2` and responds with the HTML fragment (or an
+  `fx-redirect` header).
+
   The router also serves `GET /fractal/reload`, the live-reload token
   endpoint polled by the script `Fractal.Layout` injects in development.
   """
@@ -45,6 +51,30 @@ defmodule Fractal.Router do
     case find_route(:get, conn.path_info) do
       {page, path_params} -> render_page(conn, page, path_params)
       nil -> not_found(conn, current_path(conn))
+    end
+  end
+
+  def call(%Plug.Conn{method: "POST", path_info: ["fractal", "event"]} = conn, _opts) do
+    conn = conn |> Plug.Parsers.call(@parsers_opts) |> fetch_query_params()
+    path = conn.params["_fx_path"] || ""
+    event = conn.params["_fx_event"] || ""
+    segments = path |> String.split("/") |> Enum.reject(&(&1 == ""))
+
+    case find_route(:get, segments) do
+      {page, path_params} ->
+        if event in Page.events(page) do
+          handle_event(conn, page, event, path_params)
+        else
+          event_error(
+            conn,
+            404,
+            "#{inspect(page)} (at #{path}) does not declare the event #{inspect(event)} — " <>
+              "its events are #{inspect(Page.events(page))}"
+          )
+        end
+
+      nil ->
+        event_error(conn, 404, "no page found at #{inspect(path)}")
     end
   end
 
@@ -138,6 +168,48 @@ defmodule Fractal.Router do
     exception ->
       Logger.error(Exception.format(:error, exception, __STACKTRACE__))
       render_error(conn, page, exception, __STACKTRACE__)
+  end
+
+  defp handle_event(conn, page, event, path_params) do
+    params =
+      conn.params
+      |> Map.drop(["_fx_path", "_fx_event"])
+      |> Map.merge(path_params)
+
+    assigns = %{conn: conn, params: params, path: conn.params["_fx_path"], event: event}
+
+    case page.handle_event(event, assigns) do
+      {:fragment, content} ->
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, content |> HTML.to_safe() |> HTML.safe_to_string())
+
+      {:redirect, to} when is_binary(to) ->
+        conn
+        |> put_resp_header("fx-redirect", to)
+        |> send_resp(204, "")
+
+      other ->
+        raise ArgumentError,
+              "#{inspect(page)}.handle_event/2 must return {:fragment, content} or " <>
+                "{:redirect, to}, got: #{inspect(other)}"
+    end
+  rescue
+    exception ->
+      Logger.error(Exception.format(:error, exception, __STACKTRACE__))
+
+      detail =
+        if dev_mode?(),
+          do: "\n" <> Exception.format(:error, exception, __STACKTRACE__),
+          else: ""
+
+      event_error(conn, 500, "#{inspect(page)} raised handling #{inspect(event)}#{detail}")
+  end
+
+  defp event_error(conn, status, message) do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(status, message)
   end
 
   defp build_assigns(conn, path_params) do
