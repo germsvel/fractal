@@ -11,51 +11,7 @@ defmodule Fractal.Layout do
   `/fractal/reload` and reloads the browser when code recompiles.
   """
 
-  alias Fractal.{Form, HTML}
-
-  @css """
-  :root { color-scheme: light dark; }
-  * { box-sizing: border-box; }
-  body {
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    margin: 0; padding: 3rem 1.5rem; background: #0b1021; color: #e6e9f2;
-  }
-  main { max-width: 44rem; margin: 0 auto; line-height: 1.6; }
-  h1 { font-size: 2.2rem; margin-bottom: 0.25rem; }
-  h1, h2 { color: #ffffff; }
-  a { color: #7cc4ff; }
-  code {
-    background: rgba(255, 255, 255, 0.08); padding: 0.15rem 0.35rem;
-    border-radius: 0.25rem; font-size: 0.95em;
-  }
-  pre { background: rgba(255, 255, 255, 0.08); padding: 1rem; overflow-x: auto; }
-  .lead { font-size: 1.15rem; color: #b8c0d9; }
-  ul { padding-left: 1.25rem; }
-  .field { margin: 1rem 0; }
-  .field label { display: block; margin-bottom: 0.3rem; color: #b8c0d9; }
-  .field input, .field textarea {
-    width: 100%; padding: 0.5rem 0.65rem; border-radius: 0.35rem;
-    border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06);
-    color: #e6e9f2; font: inherit;
-  }
-  .field .error { color: #ff8787; margin: 0.3rem 0 0; font-size: 0.9rem; }
-  form.button-to { display: inline; }
-  button[type="submit"] {
-    padding: 0.55rem 1.2rem; border-radius: 0.35rem; border: none;
-    background: #7cc4ff; color: #0b1021; font: inherit; font-weight: 600; cursor: pointer;
-  }
-  .session-bar {
-    max-width: 44rem; margin: 0 auto 1.5rem; display: flex; gap: 0.75rem;
-    align-items: baseline; justify-content: flex-end; color: #b8c0d9; font-size: 0.95rem;
-  }
-  .session-bar form.button-to button[type="submit"] {
-    padding: 0.2rem 0.6rem; font-size: 0.85rem; background: rgba(255, 255, 255, 0.12);
-    color: #e6e9f2;
-  }
-  .flash { max-width: 44rem; margin: 0 auto 1rem; padding: 0.6rem 0.9rem; border-radius: 0.35rem; }
-  .flash-info { background: rgba(124, 196, 255, 0.15); border: 1px solid rgba(124, 196, 255, 0.5); }
-  .flash-error { background: rgba(255, 135, 135, 0.15); border: 1px solid rgba(255, 135, 135, 0.5); }
-  """
+  alias Fractal.{Assets, Form, HTML, Page}
 
   @live_reload_script """
   <script>
@@ -79,15 +35,18 @@ defmodule Fractal.Layout do
   def render(page, assigns) do
     shell(page.title(), HTML.to_safe(page.render(assigns)),
       flash: assigns[:flash],
-      session: assigns[:session]
+      session: assigns[:session],
+      page: page
     )
   end
 
   @doc """
   Renders a full HTML document from a title and body content.
 
-  Options: `:flash` (map of level → message, rendered as banners) and
-  `:session` (used for the signed-in bar when it has a `"user_name"`).
+  Options: `:flash` (map of level → message, rendered as banners),
+  `:session` (used for the signed-in bar when it has a `"user_name"`),
+  and `:page` (the page module — sets the `data-page` attribute that
+  scopes the page's `style/0`).
   """
   @spec shell(String.t(), term(), keyword()) :: String.t()
   def shell(title, body, opts \\ []) do
@@ -100,12 +59,14 @@ defmodule Fractal.Layout do
       "\">\n",
       "<title>",
       HTML.escape(title),
-      "</title>\n<style>",
-      @css,
-      "</style>\n</head>\n<body>\n",
+      "</title>\n<link rel=\"stylesheet\" href=\"",
+      Assets.css_path(),
+      "\">\n</head>\n<body>\n",
       session_bar(opts[:session]),
       flash_banners(opts[:flash]),
-      "<main>",
+      "<main",
+      page_attr(opts[:page]),
+      ">",
       HTML.to_safe(body).content,
       "</main>\n",
       Fractal.Interactive.runtime_js(),
@@ -113,6 +74,9 @@ defmodule Fractal.Layout do
       "</body>\n</html>\n"
     ])
   end
+
+  defp page_attr(nil), do: ""
+  defp page_attr(page), do: [" data-page=\"", Page.slug(page), "\""]
 
   defp session_bar(%{"user_name" => name}) when is_binary(name) and name != "" do
     HTML.tag(:div, [class: "session-bar"], [

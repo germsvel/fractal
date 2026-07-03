@@ -44,6 +44,11 @@ defmodule Fractal.Router do
   alias Fractal.{HTML, Layout, LiveReload, Page}
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
+  @static_opts Plug.Static.init(
+                 at: "/assets",
+                 from: "assets/static",
+                 cache_control_for_vsn_requests: "public, max-age=31536000, immutable"
+               )
   @method_override_opts Plug.MethodOverride.init([])
   @csrf_opts Plug.CSRFProtection.init([])
   @session_opts Plug.Session.init(
@@ -77,6 +82,31 @@ defmodule Fractal.Router do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(200, ~s({"token":#{LiveReload.token()}}))
+  end
+
+  # the CSS bundle: assets/app.css + every page's scoped style/0
+  def call(%Plug.Conn{method: "GET", path_info: ["fractal", "assets", name]} = conn, _opts) do
+    if String.ends_with?(name, ".css") do
+      {_hash, css} = Fractal.Assets.css_bundle()
+
+      conn
+      |> put_resp_content_type("text/css")
+      |> put_resp_header("cache-control", "public, max-age=31536000, immutable")
+      |> send_resp(200, css)
+    else
+      not_found(conn, current_path(conn))
+    end
+  end
+
+  # files under assets/static/, referenced via Fractal.Assets.asset_path/1
+  def call(%Plug.Conn{method: "GET", path_info: ["assets" | _rest]} = conn, _opts) do
+    conn = Plug.Static.call(conn, @static_opts)
+
+    if conn.halted do
+      conn
+    else
+      not_found(conn, current_path(conn))
+    end
   end
 
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do

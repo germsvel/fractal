@@ -13,6 +13,7 @@ defmodule Mix.Tasks.Fractal.VerifyTest do
 
     messages = flush_messages()
     assert Enum.any?(messages, &(&1 =~ "✓ session secret is configured"))
+    assert Enum.any?(messages, &(&1 =~ "✓ app stylesheet is well-formed"))
     assert Enum.any?(messages, &(&1 =~ "✓ migrations are up"))
     assert Enum.any?(messages, &(&1 =~ "✓ pages are defined"))
     assert Enum.any?(messages, &(&1 =~ "✓ GET routes are unique"))

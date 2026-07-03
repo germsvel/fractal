@@ -167,6 +167,27 @@ defmodule Fractal.PageTest do
     def handle_event("ping", _assigns), do: {:fragment, tag(:p, [], ["pong"])}
   end
 
+  defmodule Styled do
+    use Fractal.Page, path: "/styled"
+
+    @impl Fractal.Page
+    def style, do: "h1 { color: red; }"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["styled"])
+  end
+
+  test "slug/1 derives the data-page slug from the module" do
+    assert Fractal.Page.slug(Fractal.Pages.Home) == "home"
+    assert Fractal.Page.slug(Fractal.Pages.NewPost) == "new-post"
+    assert Fractal.Page.slug(Styled) == "styled"
+  end
+
+  test "style/1 returns the page's CSS or nil" do
+    assert Fractal.Page.style(Styled) == "h1 { color: red; }"
+    assert Fractal.Page.style(Sample) == nil
+  end
+
   test "events/0 defaults to [] and reflects the :events option" do
     assert Sample.events() == []
     assert WithEvents.events() == ["ping"]

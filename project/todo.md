@@ -6,7 +6,6 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Asset pipeline?
 - [ ] UI components?
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
@@ -25,5 +24,6 @@ Done
 - [x] Handle other CRUD actions in /task3.md
 - [x] Add interactivity in /task4.md
 - [x] CORS protection with sessions in /task5.md
+- [x] Assets in /task6.md
 
 

@@ -6,6 +6,7 @@ defmodule Fractal.Pages.Home do
   @impl Fractal.Page
   def render(_assigns) do
     tag(:section, [], [
+      tag(:img, src: asset_path("logo.svg"), alt: "Fractal logo", class: "logo"),
       tag(:h1, [], ["Fractal"]),
       tag(:p, [class: "lead"], [
         "An AI-first web framework for Elixir. You are looking at its default page."
@@ -41,6 +42,13 @@ defmodule Fractal.Pages.Home do
         ])
       ])
     ])
+  end
+
+  @impl Fractal.Page
+  def style do
+    """
+    .logo { width: 3.5rem; height: 3.5rem; }
+    """
   end
 
   defp page_links do

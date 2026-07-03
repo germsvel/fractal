@@ -189,6 +189,31 @@ defmodule Fractal.RouterTest do
     assert conn.resp_body =~ "Create a Fractal page at /does-not-exist"
   end
 
+  describe "assets" do
+    test "serves the CSS bundle with immutable caching" do
+      conn = get(Fractal.Assets.css_path())
+
+      assert conn.status == 200
+      assert {"content-type", "text/css; charset=utf-8"} in conn.resp_headers
+      assert {"cache-control", "public, max-age=31536000, immutable"} in conn.resp_headers
+      assert conn.resp_body =~ "--accent:"
+      assert conn.resp_body =~ ~s([data-page="home"])
+    end
+
+    test "serves static files under /assets" do
+      conn = get("/assets/logo.svg")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<svg"
+    end
+
+    test "missing static files fall through to the 404 page" do
+      conn = get("/assets/nope.png")
+
+      assert conn.status == 404
+    end
+  end
+
   test "GET /fractal/reload returns the live-reload token" do
     conn = get("/fractal/reload")
 

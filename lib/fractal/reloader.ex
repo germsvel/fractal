@@ -21,7 +21,11 @@ defmodule Fractal.Reloader do
   @impl true
   def init(opts) do
     if Keyword.get(opts, :watch, true) do
-      dirs = opts |> Keyword.get(:dirs, ["lib"]) |> Enum.map(&Path.expand/1)
+      dirs =
+        opts
+        |> Keyword.get(:dirs, ["lib", "assets"])
+        |> Enum.map(&Path.expand/1)
+        |> Enum.filter(&File.dir?/1)
 
       case FileSystem.start_link(dirs: dirs) do
         {:ok, watcher} ->
@@ -72,5 +76,10 @@ defmodule Fractal.Reloader do
     end
   end
 
-  defp source_file?(path), do: Path.extname(to_string(path)) in @extensions
+  defp source_file?(path) do
+    path = to_string(path)
+    # any change under assets/ (styles, images) also triggers a browser
+    # reload — the recompile is a no-op, but the reload token bumps
+    Path.extname(path) in @extensions or String.contains?(path, "/assets/")
+  end
 end

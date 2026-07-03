@@ -18,10 +18,16 @@ defmodule Fractal.Verify do
       handler (`handle_post/1`, `handle_put/1`, `handle_delete/1`)
     * declared events are unique non-empty strings and `handle_event/2`
       is exported when a page declares any
+    * `style/0` (when defined) returns well-formed CSS (balanced braces)
     * every page's `render/1` runs without raising (with empty params
-      and session) and returns renderable content
+      and session) and returns renderable content — which also catches
+      references to missing assets, since `asset_path/1` raises
     * every `<form>` a page renders carries a CSRF token (i.e. was
       built with `Fractal.Form`, not by hand)
+    * rendered output contains no `<style>` tags (styles belong in
+      `style/0` / `assets/app.css`) and no external `script`/`link`
+      references (the framework owns the client — vendor files into
+      `assets/static/`)
 
   `pending_migrations/0` and `secret_key/0` additionally check the
   database is migrated and the session secret is configured;
@@ -78,6 +84,48 @@ defmodule Fractal.Verify do
        {:error,
         "could not check migrations (is the database running? try `mix ecto.setup`): " <>
           Exception.message(exception)}}
+  end
+
+  @doc """
+  Checks that the shared stylesheet exists and is well-formed.
+  """
+  @spec stylesheet() :: result()
+  def stylesheet do
+    name = "app stylesheet is well-formed"
+
+    case File.read(Fractal.Assets.app_css_file()) do
+      {:ok, css} ->
+        if count_occurrences(css, "{") == count_occurrences(css, "}") do
+          {name, :ok}
+        else
+          {name, {:error, "#{Fractal.Assets.app_css_file()} has unbalanced braces"}}
+        end
+
+      {:error, _reason} ->
+        {name,
+         {:error,
+          "#{Fractal.Assets.app_css_file()} is missing — it holds the design tokens " <>
+            "and app-wide styles"}}
+    end
+  end
+
+  @doc """
+  Files in `assets/static/` that no page source references via
+  `asset_path/1`. Informational — reported by `mix fractal.verify`, but
+  not a failure.
+  """
+  @spec orphaned_assets() :: [String.t()]
+  def orphaned_assets do
+    referenced =
+      "lib/**/*.ex"
+      |> Path.wildcard()
+      |> Enum.flat_map(fn file ->
+        Regex.scan(~r/asset_path\(\s*"([^"]+)"/, File.read!(file), capture: :all_but_first)
+      end)
+      |> List.flatten()
+      |> MapSet.new()
+
+    Enum.reject(Fractal.Assets.static_files(), &MapSet.member?(referenced, &1))
   end
 
   @doc """
@@ -148,6 +196,7 @@ defmodule Fractal.Verify do
       action_checks ++
       [
         {"#{inspect(page)} handles its events", validate_events(page)},
+        {"#{inspect(page)} declares valid styles", validate_style(page)},
         {"#{inspect(page)} renders", validate_render(page)}
       ]
   end
@@ -228,16 +277,47 @@ defmodule Fractal.Verify do
 
     case page.render(assigns) do
       %HTML.Safe{} = safe ->
-        scan_forms(HTML.safe_to_string(safe))
+        scan_html(HTML.safe_to_string(safe))
 
       content when is_binary(content) or is_list(content) ->
-        scan_forms(content |> HTML.to_safe() |> HTML.safe_to_string())
+        scan_html(content |> HTML.to_safe() |> HTML.safe_to_string())
 
       other ->
         {:error, "render/1 must return Fractal.HTML content or a string, got: #{inspect(other)}"}
     end
   rescue
     exception -> {:error, "render/1 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_style(page) do
+    case Page.style(page) do
+      nil ->
+        :ok
+
+      style when is_binary(style) ->
+        cond do
+          count_occurrences(style, "{") != count_occurrences(style, "}") ->
+            {:error, "style/0 has unbalanced braces"}
+
+          String.contains?(style, "</style") ->
+            {:error, "style/0 must be plain CSS — no </style> tags"}
+
+          true ->
+            :ok
+        end
+
+      other ->
+        {:error, "style/0 must return a CSS string, got: #{inspect(other)}"}
+    end
+  rescue
+    exception -> {:error, "style/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp scan_html(html) do
+    with :ok <- scan_forms(html),
+         :ok <- scan_style_tags(html) do
+      scan_external_refs(html)
+    end
   end
 
   # every <form> must carry a CSRF token — i.e. be built with
@@ -250,6 +330,28 @@ defmodule Fractal.Verify do
       {:error,
        "renders a <form> without a CSRF token — build forms with " <>
          "Fractal.Form.form_for/4 or button_to/3 instead of raw <form> tags"}
+    else
+      :ok
+    end
+  end
+
+  defp scan_style_tags(html) do
+    if String.contains?(html, "<style") do
+      {:error,
+       "renders a <style> tag — put page styles in style/0 (scoped automatically) " <>
+         "and shared styles in assets/app.css"}
+    else
+      :ok
+    end
+  end
+
+  # agents love pasting CDN <script>/<link> lines; the framework owns
+  # the client, so external code never loads from third-party origins
+  defp scan_external_refs(html) do
+    if Regex.match?(~r/<(script|link)[^>]+(src|href)="(https?:)?\/\//i, html) do
+      {:error,
+       "references an external script or stylesheet — Fractal owns the client; " <>
+         "vendor files into assets/static/ and reference them with asset_path/1"}
     else
       :ok
     end

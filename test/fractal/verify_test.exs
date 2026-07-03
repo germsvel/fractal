@@ -95,6 +95,50 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: "x"
   end
 
+  defmodule BadStyle do
+    use Fractal.Page, path: "/verify-bad-style"
+
+    @impl Fractal.Page
+    def style, do: "h1 { color: red;"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
+  defmodule InlineStylePage do
+    use Fractal.Page, path: "/verify-inline-style"
+
+    @impl Fractal.Page
+    def render(_assigns), do: raw("<style>h1 { color: red; }</style>")
+  end
+
+  defmodule CdnPage do
+    use Fractal.Page, path: "/verify-cdn"
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      raw(~s(<script src="https://cdn.example.com/lib.js"></script>))
+    end
+  end
+
+  defmodule ExternalLinkPage do
+    use Fractal.Page, path: "/verify-external-link"
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      tag(:a, [href: "https://elixir-lang.org"], ["Elixir"])
+    end
+  end
+
+  defmodule MissingAssetPage do
+    use Fractal.Page, path: "/verify-missing-asset"
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      tag(:img, src: asset_path("no-such-file.png"), alt: "nope")
+    end
+  end
+
   # a page that builds its form by hand instead of with Fractal.Form
   defmodule RawFormPage do
     use Fractal.Page, path: "/verify-raw-form"
@@ -222,6 +266,54 @@ defmodule Fractal.VerifyTest do
     Application.delete_env(:fractal, :secret_key_base)
     assert {_name, {:error, message}} = Verify.secret_key()
     assert message =~ "is not set"
+  end
+
+  test "detects unbalanced braces in style/0" do
+    results = Verify.run([BadStyle])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "declares valid styles" and message =~ "unbalanced braces"
+           end)
+  end
+
+  test "detects rendered <style> tags" do
+    results = Verify.run([InlineStylePage])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "renders" and message =~ "style/0" and message =~ "assets/app.css"
+           end)
+  end
+
+  test "detects external script and stylesheet references" do
+    results = Verify.run([CdnPage])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "renders" and message =~ "external script or stylesheet"
+           end)
+
+    # plain external <a> links are fine
+    assert Verify.ok?(Verify.run([ExternalLinkPage]))
+  end
+
+  test "detects references to missing assets via the smoke render" do
+    results = Verify.run([MissingAssetPage])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "renders" and message =~ "no-such-file.png"
+           end)
+  end
+
+  test "stylesheet/0 checks assets/app.css" do
+    assert {"app stylesheet is well-formed", :ok} = Verify.stylesheet()
+  end
+
+  test "orphaned_assets/0 only reports unreferenced files" do
+    # logo.svg is referenced by the home page
+    refute "logo.svg" in Verify.orphaned_assets()
   end
 
   test "detects a hand-rolled <form> without a CSRF token" do

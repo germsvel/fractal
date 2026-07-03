@@ -36,6 +36,23 @@ defmodule Fractal.Page do
     * `:events` (optional) — the interactive events this page handles
       with `handle_event/2`. See `Fractal.Interactive`.
 
+  ## Styles
+
+  A page optionally implements `style/0`, returning plain CSS for this
+  page only:
+
+      @impl Fractal.Page
+      def style do
+        \"\"\"
+        .plans { display: grid; gap: 1rem; }
+        h2 { color: var(--accent); }
+        \"\"\"
+      end
+
+  Styles are collected into the app stylesheet automatically and scoped
+  to the page (they cannot affect other pages). Shared design tokens
+  live in `assets/app.css`. See `Fractal.Assets` and `guides/assets.md`.
+
   Each action option keeps a form and the action it submits to in one
   file. Declaring an action route without defining its handler (or vice
   versa) is a compile-time error — the same goes for `:events` and
@@ -133,6 +150,7 @@ defmodule Fractal.Page do
   @callback put_path() :: String.t() | nil
   @callback delete_path() :: String.t() | nil
   @callback events() :: [String.t()]
+  @callback style() :: String.t()
   @callback render(assigns :: map()) :: Fractal.HTML.Safe.t() | iodata()
   @callback handle_post(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_put(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
@@ -144,6 +162,7 @@ defmodule Fractal.Page do
                       put_path: 0,
                       delete_path: 0,
                       events: 0,
+                      style: 0,
                       handle_post: 1,
                       handle_put: 1,
                       handle_delete: 1,
@@ -156,6 +175,7 @@ defmodule Fractal.Page do
       @behaviour Fractal.Page
       import Fractal.HTML
       import Fractal.Interactive
+      import Fractal.Assets, only: [asset_path: 1]
 
       @fractal_page_path Keyword.get(opts, :path)
       @fractal_page_title Keyword.get(opts, :title)
@@ -295,6 +315,27 @@ defmodule Fractal.Page do
   @spec events(module()) :: [String.t()]
   def events(module) do
     if function_exported?(module, :events, 0), do: module.events(), else: []
+  end
+
+  @doc "Returns the page's `style/0` CSS, or `nil` (works for any page)."
+  @spec style(module()) :: String.t() | nil
+  def style(module) do
+    if function_exported?(module, :style, 0), do: module.style(), else: nil
+  end
+
+  @doc """
+  The page's slug, used to scope its styles (`data-page` attribute).
+
+      iex> Fractal.Page.slug(Fractal.Pages.NewPost)
+      "new-post"
+  """
+  @spec slug(module()) :: String.t()
+  def slug(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+    |> String.replace("_", "-")
   end
 
   @doc "Returns `true` if `route` is a well-formed route pattern."

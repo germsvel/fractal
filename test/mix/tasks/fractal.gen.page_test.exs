@@ -58,6 +58,18 @@ defmodule Mix.Tasks.Fractal.Gen.PageTest do
     end)
   end
 
+  @tag :tmp_dir
+  test "scaffolds a scoped style block with --style", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      Mix.Tasks.Fractal.Gen.Page.run(["Fancy", "--style"])
+
+      page = File.read!("lib/fractal/pages/fancy.ex")
+      assert page =~ "def style do"
+      assert page =~ "var(--accent)"
+      assert page =~ "assets/app.css"
+    end)
+  end
+
   test "rejects malformed --events" do
     assert_raise Mix.Error, ~r/--events/, fn ->
       Mix.Tasks.Fractal.Gen.Page.run(["Bad", "--events", "a,a"])

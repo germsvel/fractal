@@ -27,6 +27,21 @@ defmodule Fractal.LayoutTest do
     assert Layout.shell("t", "b") =~ ~s(<meta name="fractal-csrf-token" content=")
   end
 
+  test "links the fingerprinted CSS bundle instead of inlining styles" do
+    html = Layout.shell("t", "b")
+
+    assert html =~ ~r|<link rel="stylesheet" href="/fractal/assets/app-[0-9a-f]{8}\.css">|
+    refute html =~ "<style>"
+  end
+
+  test "render/2 scopes the page with a data-page attribute" do
+    html = Layout.render(Fractal.Pages.Home, %{params: %{}, session: %{}, path: "/", conn: nil})
+
+    assert html =~ ~s(<main data-page="home">)
+    # shells without a page (404/error) carry no scope
+    assert Layout.shell("t", "b") =~ "<main>"
+  end
+
   test "shows the signed-in bar only when the session has a user_name" do
     html = Layout.shell("t", "b", session: %{"user_name" => "Ada"})
     assert html =~ ~s(class="session-bar")

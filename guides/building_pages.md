@@ -40,6 +40,8 @@ Rules:
   `guides/forms_and_data.md`.
 - Pages handle interactivity in the same file too, via `events:` and
   `handle_event/2` — no JavaScript — see `guides/interactivity.md`.
+- Pages style themselves in the same file as well, via `style/0`
+  (plain CSS, scoped automatically) — see `guides/assets.md`.
 
 ## Rendering HTML
 

@@ -26,6 +26,15 @@ defmodule Fractal.Pages.Counter do
   end
 
   @impl Fractal.Page
+  def style do
+    """
+    #counter { display: flex; gap: 0.5rem; align-items: center; }
+    #counter p { font-size: 1.5rem; margin: 0 1rem 0 0; }
+    button { min-width: 3.5rem; }
+    """
+  end
+
+  @impl Fractal.Page
   def handle_event("increment", assigns), do: {:fragment, counter(current(assigns) + 1)}
   def handle_event("decrement", assigns), do: {:fragment, counter(current(assigns) - 1)}
   def handle_event("reset", _assigns), do: {:redirect, "/counter"}

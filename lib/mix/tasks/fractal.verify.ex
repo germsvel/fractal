@@ -26,6 +26,7 @@ defmodule Mix.Tasks.Fractal.Verify do
 
     results = [
       Fractal.Verify.secret_key(),
+      Fractal.Verify.stylesheet(),
       Fractal.Verify.pending_migrations() | Fractal.Verify.run()
     ]
 
@@ -35,6 +36,17 @@ defmodule Mix.Tasks.Fractal.Verify do
     end)
 
     failures = Fractal.Verify.errors(results)
+
+    case Fractal.Verify.orphaned_assets() do
+      [] ->
+        :ok
+
+      orphans ->
+        Mix.shell().info(
+          "\nℹ unreferenced files in assets/static/ (not a failure): " <>
+            Enum.join(orphans, ", ")
+        )
+    end
 
     tests_failed? =
       if Keyword.get(opts, :tests, true) and Mix.env() != :test do
