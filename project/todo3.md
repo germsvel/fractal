@@ -1,4 +1,4 @@
-# Task 2: extend page functionality to all CRUD actions
+# [x] Task 3: extend page functionality to all CRUD actions
 
 ## Goal
 
@@ -42,8 +42,8 @@ you'll touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
 
-- [ ] I can launch a web server with a `mix` task and see the new page with a
+- [x] I can launch a web server with a `mix` task and see the new page with a
 form that creates a new resource and then takes me to that new resource's page.
-- [ ] I can prompt an agent to update an existing page with a form, and it does so. It
+- [x] I can prompt an agent to update an existing page with a form, and it does so. It
   also creates the migration to change the database (if needed).
-- [ ] I can run all the tests with `mix test` and they pass
+- [x] I can run all the tests with `mix test` and they pass

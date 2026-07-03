@@ -1,4 +1,4 @@
-# Task 2: build forms and database access
+# [done] Task 2: build forms and database access
 
 ## Goal
 
@@ -41,8 +41,8 @@ you'll touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
 
-- [ ] I can launch a web server with a `mix` task and see the new page with a
+- [x] I can launch a web server with a `mix` task and see the new page with a
 form that creates a new resource and then takes me to that new resource's page.
-- [ ] I can prompt an agent to create a new page with a form, and it does so. It
+- [x] I can prompt an agent to create a new page with a form, and it does so. It
   also creates the migration to change the database.
-- [ ] I can run all the tests with `mix test` and they pass
+- [x] I can run all the tests with `mix test` and they pass
