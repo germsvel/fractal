@@ -108,7 +108,7 @@ test "members see the dashboard" do
 end
 ```
 
-Helpers: `get/1..3`, `post/1..3`, `put/1..3`,
+Helpers: `get/1..3`, `post/1..3`, `put/1..3`, `patch/1..3`,
 `delete/1..3`, and `fire_event/2..4` — all accept a trailing
 `session:` option for logged-in scenarios; assert on writes with
 `Plug.Conn.get_session/2`.

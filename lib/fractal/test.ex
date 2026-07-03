@@ -41,6 +41,10 @@ defmodule Fractal.Test do
   @spec put(String.t(), map(), keyword()) :: Plug.Conn.t()
   def put(path, params \\ %{}, opts \\ []), do: request(:put, path, params, opts)
 
+  @doc "PATCHes a page — dispatches to its put route, like PUT."
+  @spec patch(String.t(), map(), keyword()) :: Plug.Conn.t()
+  def patch(path, params \\ %{}, opts \\ []), do: request(:patch, path, params, opts)
+
   @doc "DELETEs to a page's delete route through the router."
   @spec delete(String.t(), map(), keyword()) :: Plug.Conn.t()
   def delete(path, params \\ %{}, opts \\ []), do: request(:delete, path, params, opts)

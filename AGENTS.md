@@ -28,8 +28,8 @@ so purely with AI — so this file is the contract for how agents work here.
 - **CSRF is automatic and invisible**: `Fractal.Form` and the fx runtime
   attach tokens; the router rejects requests without them. Never
   hand-write `<form>` tags or `fetch` calls — verify flags them.
-- **Tests drive pages through `Fractal.Test`** (`get`, `post`,
-  `put`, `delete`, `fire_event`, all with a `session:` opt).
+- **Tests drive pages through `Fractal.Test`** (`get`, `post`, `put`,
+  `patch`, `delete`, `fire_event`, all with a `session:` opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
   not hand-roll persistence.
 - `mix fractal.verify` is the feedback loop. A change is not done until

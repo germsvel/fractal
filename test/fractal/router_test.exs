@@ -65,11 +65,7 @@ defmodule Fractal.RouterTest do
     assert put_conn.status == 303
     assert Repo.get!(Fractal.Post, post.id).title == "via PUT"
 
-    patch_conn =
-      :patch
-      |> conn("/posts/#{post.id}", %{"title" => "via PATCH"})
-      |> Plug.Conn.put_private(:plug_skip_csrf_protection, true)
-      |> Router.call([])
+    patch_conn = patch("/posts/#{post.id}", %{"title" => "via PATCH"})
 
     assert patch_conn.status == 303
     assert Repo.get!(Fractal.Post, post.id).title == "via PATCH"
