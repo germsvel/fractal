@@ -6,7 +6,6 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] CORS protection with sessions
 - [ ] Asset pipeline?
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
@@ -24,5 +23,6 @@ Done
 - [x] Handle forms and database in /task2.md
 - [x] Handle other CRUD actions in /task3.md
 - [x] Add interactivity in /task4.md
+- [x] CORS protection with sessions in /task5.md
 
 
