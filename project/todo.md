@@ -1,42 +1,28 @@
-# [Done] Task: build Fractal Elixir app
+Todo
+====
 
-## Goal
+Task board for the Fractal project.
 
-Fractal is a new web framework written in Elixir that is AI-first.
+Ideas Backlog
+---------------
 
-In practice that means at least the following:
+- [ ] CORS protection with sessions
+- [ ] Asset pipeline?
+- [ ] Prompting from the page itself? (can we embed)
+- [ ] Push from the server?
+- [ ] Better test helpers
+- [ ] Should each page have a verify? function that verifies itself? (thinking
+  of extensions)
+- [ ] Do we need "plugin" system? Or is each page its own plugin?
+  - example: what if people want to pull a known auth package?
+- [ ] Middleware to add across all pages
 
-- It provides primitives for building web-pages in a way that AI agents can
-easily consume and extend (e.g. think of Pi the code harness and how it's easily
-customizable by prompting the agent)
+Done
+-----
 
-- It focuses on the developer experience using AI to build the web application.
-Developers can dive in and write code, but the fundamental pattern is to prompt
-the AI.
+- [x] Initial idea in /task1.md
+- [x] Handle forms and database in /task2.md
+- [x] Handle other CRUD actions in /task3.md
+- [x] Add interactivity in /task4.md
 
-- It has built-in verification checks to ensure that the code AI produces is
-correct.
 
-- It has built-in documentation that the AI uses when a developer prompts it to
-  create a new page or feature.
-
-## Scope
-
-- Out of scope: We probably want to use Ecto for database access. Do not
-reimplement that portion of the stack.
-
-## Constraints
-
-- Use Elixir 1.20
-- Code must have test coverage
-
-## Plan first
-
-Before changing anything, map the full plan and list the files
-you'll touch. Wait for my go-ahead, then execute in one pass.
-
-## Definition of done
-- [x] I can launch a web server with a `mix` task and see a web page rendered
-- [x] I can prompt an agent to create a new page, and it does so. In
-development, the page auto-reloads and I see the changes.
-- [x] I can run all the testes with `mix test` and they pass

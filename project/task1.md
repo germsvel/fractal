@@ -1,5 +1,4 @@
-
-# Task 4: extend page functionality to be interactive
+# [Done] Task: build Fractal Elixir app
 
 ## Goal
 
@@ -23,18 +22,13 @@ correct.
 
 ## Scope
 
-Keep in mind the AI-first principle and what that means in the "Goal" statements
-above. We might want to get creative here or use prior art. Not sure.
-
-- For the fourth task, we want to be able to handle more interactivity on the
-page. That could mean adding JavaScript somehow, but ideally, it's completely
-abstracted from the user of the framework. Do some research on what you think is
-a good path for AI-first web development -- for example, maybe we want to use
-WebSockets but maybe not!
+- Out of scope: We probably want to use Ecto for database access. Do not
+reimplement that portion of the stack.
 
 ## Constraints
 
-- Keep the 1-file per page structure
+- Use Elixir 1.20
+- Code must have test coverage
 
 ## Plan first
 
@@ -42,9 +36,7 @@ Before changing anything, map the full plan and list the files
 you'll touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
-
-- [ ] I can launch a web server with a `mix` task and see the new page with
-interactivity
-- [ ] I can prompt an agent to create a new interactive page, and it does so.
-- [ ] I can run all the tests with `mix test` and they pass. Tests verify
-interactivity too!
+- [x] I can launch a web server with a `mix` task and see a web page rendered
+- [x] I can prompt an agent to create a new page, and it does so. In
+development, the page auto-reloads and I see the changes.
+- [x] I can run all the testes with `mix test` and they pass
