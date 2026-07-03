@@ -27,7 +27,8 @@ reimplement that portion of the stack.
 
 ## Constraints
 
-- Test-drive impleentation.
+- Use Elixir 1.20
+- Code must have test coverage
 
 ## Plan first
 
