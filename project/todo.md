@@ -7,6 +7,7 @@ Ideas Backlog
 ---------------
 
 - [ ] Asset pipeline?
+- [ ] UI components?
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
 - [ ] Better test helpers
