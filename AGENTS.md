@@ -6,11 +6,17 @@ so purely with AI — so this file is the contract for how agents work here.
 ## Orientation
 
 - A **page** is one module in `lib/fractal/pages/` using `Fractal.Page`.
-  Routes are auto-discovered; there is no router file to edit.
+  Routes are auto-discovered; there is no router file to edit. Dynamic
+  segments (`/posts/:id`) bind `params["id"]`.
+- A page that renders a form also **handles the submission in the same
+  file**: `use Fractal.Page, path: "/posts/new", post: "/posts"` plus
+  `handle_post/1`. Keep it that way — do not add controllers.
 - HTML is built with `Fractal.HTML.tag/3` — escaped by default, `raw/1`
-  is the only escape hatch.
+  is the only escape hatch. Forms use `Fractal.Form`.
+- Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
+  not hand-roll persistence.
 - `mix fractal.verify` is the feedback loop. A change is not done until
-  it passes.
+  it passes — it also fails on pending migrations.
 
 ## Agent workflow
 
@@ -19,9 +25,13 @@ When asked to create or change a page or feature:
 1. **Read the docs first**: run `mix fractal.ai.docs` (or read
    `guides/*.md`). They define page anatomy, conventions, and testing
    expectations.
-2. **Scaffold**: `mix fractal.gen.page Name --path /route --title "Title"`
-   creates the page and its test. For non-trivial pages, edit `render/1`
-   and make the test assert on the real content.
+2. **Scaffold**: for a static page,
+   `mix fractal.gen.page Name --path /route --title "Title"`. For a
+   database-backed resource with a form,
+   `mix fractal.gen.resource Name field:type ...` — it generates the
+   schema, the migration, the pages, and their tests; then run
+   `mix ecto.migrate`. Edit `render/1` for real content and keep the
+   tests asserting on it.
 3. **Verify**: run `mix fractal.verify`. Fix anything it reports and
    re-run until green.
 4. In development, `mix fractal.server` auto-recompiles and reloads the
@@ -32,10 +42,12 @@ When asked to create or change a page or feature:
 | Command | Purpose |
 | --- | --- |
 | `mix fractal.server` | Start the dev server on port 4000 (live reload on) |
-| `mix fractal.gen.page Name` | Scaffold a page + test |
-| `mix fractal.verify` | Compile (warnings-as-errors) + page checks + tests |
+| `mix fractal.gen.page Name` | Scaffold a static page + test |
+| `mix fractal.gen.resource Name field:type ...` | Scaffold schema + migration + form pages + tests |
+| `mix ecto.setup` / `mix ecto.migrate` | Create the database / run pending migrations |
+| `mix fractal.verify` | Compile (warnings-as-errors) + migration check + page checks + tests |
 | `mix fractal.ai.docs` | Print the guides agents must read |
-| `mix test` | Run the test suite directly |
+| `mix test` | Run the test suite directly (creates/migrates the test DB) |
 
 ## Conventions
 
@@ -44,8 +56,9 @@ When asked to create or change a page or feature:
   mirroring the `lib/` layout.
 - Keep pages self-contained; shared markup helpers belong in
   `Fractal.HTML` or a dedicated module, not copied between pages.
-- Database access (when it arrives) will use Ecto — do not hand-roll
-  persistence.
+- Database tests use `Fractal.DataCase` (sandboxed, `async: true` safe).
+- Postgres defaults to `postgres:postgres@localhost`; override with
+  `PGUSER`/`PGPASSWORD`/`PGHOST`.
 
 ## Model routing (through July 7)
 

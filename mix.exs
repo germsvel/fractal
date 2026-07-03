@@ -6,10 +6,15 @@ defmodule Fractal.MixProject do
       app: :fractal,
       version: "0.1.0",
       elixir: "~> 1.20",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases()
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_env), do: ["lib"]
 
   def application do
     [
@@ -41,7 +46,22 @@ defmodule Fractal.MixProject do
        override: true},
       {:hpax, git: "https://github.com/elixir-mint/hpax.git", tag: "v1.0.3", override: true},
       {:telemetry,
-       git: "https://github.com/beam-telemetry/telemetry.git", tag: "v1.4.2", override: true}
+       git: "https://github.com/beam-telemetry/telemetry.git", tag: "v1.4.2", override: true},
+      {:ecto_sql, git: "https://github.com/elixir-ecto/ecto_sql.git", tag: "v3.14.0"},
+      {:ecto, git: "https://github.com/elixir-ecto/ecto.git", tag: "v3.14.0", override: true},
+      {:postgrex,
+       git: "https://github.com/elixir-ecto/postgrex.git", tag: "v0.22.2", override: true},
+      {:db_connection,
+       git: "https://github.com/elixir-ecto/db_connection.git", tag: "v2.10.1", override: true},
+      {:decimal, git: "https://github.com/ericmj/decimal.git", tag: "v3.1.1", override: true}
+    ]
+  end
+
+  defp aliases do
+    [
+      "ecto.setup": ["ecto.create", "ecto.migrate"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
     ]
   end
 end

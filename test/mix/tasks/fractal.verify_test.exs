@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Fractal.VerifyTest do
-  use ExUnit.Case
+  use Fractal.DataCase
 
   setup do
     original_shell = Mix.shell()
@@ -12,8 +12,10 @@ defmodule Mix.Tasks.Fractal.VerifyTest do
     Mix.Tasks.Fractal.Verify.run(["--no-tests"])
 
     messages = flush_messages()
+    assert Enum.any?(messages, &(&1 =~ "✓ migrations are up"))
     assert Enum.any?(messages, &(&1 =~ "✓ pages are defined"))
-    assert Enum.any?(messages, &(&1 =~ "✓ routes are unique"))
+    assert Enum.any?(messages, &(&1 =~ "✓ GET routes are unique"))
+    assert Enum.any?(messages, &(&1 =~ "✓ POST routes are unique"))
     assert Enum.any?(messages, &(&1 =~ "Fractal.Pages.Home renders"))
     assert Enum.any?(messages, &(&1 =~ "All verification checks passed"))
   end

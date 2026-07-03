@@ -28,11 +28,15 @@ Rules:
   (snake_case of the module suffix).
 - `use Fractal.Page` takes `path:` (required, string starting with `/`,
   validated at compile time) and `title:` (optional).
-- `render/1` receives an assigns map with `:params` (query params as a
-  string-keyed map), `:path`, and `:conn` (the `Plug.Conn`, or `nil` when
-  rendered outside a request, e.g. by verification). It must handle
-  `conn: nil` gracefully.
-- Routes are exact-match. `/about` does not match `/about/team`.
+- `render/1` receives an assigns map with `:params` (path, query, and
+  form params merged, string-keyed), `:path`, and `:conn` (the
+  `Plug.Conn`, or `nil` when rendered outside a request, e.g. by
+  verification). It must handle `conn: nil` and empty params gracefully.
+- Route segments may be dynamic: `path: "/posts/:id"` binds
+  `params["id"]`. Otherwise routes match exactly — `/about` does not
+  match `/about/team` — and static segments beat dynamic ones.
+- Pages can handle form submissions in the same file via the `:post`
+  option and `handle_post/1` — see `guides/forms_and_data.md`.
 
 ## Rendering HTML
 
@@ -57,7 +61,9 @@ Pages are wrapped in `Fractal.Layout` (document shell, `<title>`, default
 stylesheet, and the live-reload script in dev). Pages only render their
 body content.
 
-## The fast path: the generator
+## The fast path: the generators
+
+For a static page:
 
 ```
 mix fractal.gen.page Pricing --path /pricing --title "Pricing"
@@ -66,6 +72,15 @@ mix fractal.gen.page Pricing --path /pricing --title "Pricing"
 creates `lib/fractal/pages/pricing.ex` and
 `test/fractal/pages/pricing_test.exs`. Then edit `render/1` and keep the
 test meaningful: assert on the real content you added.
+
+For a database-backed resource with a form (schema, migration, pages,
+tests):
+
+```
+mix fractal.gen.resource Post title:string body:text
+```
+
+See `guides/forms_and_data.md`.
 
 ## Development loop
 

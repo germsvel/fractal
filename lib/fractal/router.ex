@@ -2,10 +2,13 @@ defmodule Fractal.Router do
   @moduledoc """
   Fractal's auto-discovering router.
 
-  There is no route table to maintain: on each request the router looks up
-  the page module whose `path/0` exactly matches the request path. New page
-  modules are picked up as soon as they are compiled, which is what makes
-  the development loop (agent writes a page → watcher recompiles → browser
+  There is no route table to maintain: on each request the router matches
+  the request against the routes every page module declares — `path/0`
+  for GET, `post_path/0` for POST. Route patterns may contain dynamic
+  segments (`"/posts/:id"`), which are bound into `assigns.params`.
+  Static segments win over dynamic ones when both match. New page modules
+  are picked up as soon as they are compiled, which is what makes the
+  development loop (agent writes a page → watcher recompiles → browser
   reloads) work without restarts.
 
   The router also serves `GET /fractal/reload`, the live-reload token
@@ -20,6 +23,8 @@ defmodule Fractal.Router do
 
   alias Fractal.{HTML, Layout, LiveReload, Page}
 
+  @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
+
   @impl Plug
   def init(opts), do: opts
 
@@ -30,14 +35,21 @@ defmodule Fractal.Router do
     |> send_resp(200, ~s({"token":#{LiveReload.token()}}))
   end
 
-  def call(conn, _opts) do
-    path = current_path(conn)
-
-    case Enum.find(pages(), &(&1.path() == path)) do
-      nil -> not_found(conn, path)
-      page -> render_page(conn, page, path)
+  def call(%Plug.Conn{method: "GET"} = conn, _opts) do
+    case find_route(:get, conn.path_info) do
+      {page, path_params} -> render_page(conn, page, path_params)
+      nil -> not_found(conn, current_path(conn))
     end
   end
+
+  def call(%Plug.Conn{method: "POST"} = conn, _opts) do
+    case find_route(:post, conn.path_info) do
+      {page, path_params} -> handle_post(conn, page, path_params)
+      nil -> not_found(conn, current_path(conn))
+    end
+  end
+
+  def call(conn, _opts), do: not_found(conn, current_path(conn))
 
   @doc "All discovered page modules, sorted by path."
   @spec pages() :: [module()]
@@ -47,11 +59,32 @@ defmodule Fractal.Router do
     |> Enum.sort_by(& &1.path())
   end
 
+  defp find_route(method, path_segments) do
+    pages()
+    |> Enum.flat_map(fn page ->
+      case route_pattern(page, method) do
+        nil -> []
+        pattern -> [{page, pattern}]
+      end
+    end)
+    # static routes take precedence over ones with dynamic segments
+    |> Enum.sort_by(fn {_page, pattern} -> Page.param_count(pattern) end)
+    |> Enum.find_value(fn {page, pattern} ->
+      case Page.match(pattern, path_segments) do
+        {:ok, params} -> {page, params}
+        :error -> nil
+      end
+    end)
+  end
+
+  defp route_pattern(page, :get), do: page.path()
+  defp route_pattern(page, :post), do: Page.post_path(page)
+
   defp current_path(conn), do: "/" <> Enum.join(conn.path_info, "/")
 
-  defp render_page(conn, page, path) do
+  defp render_page(conn, page, path_params) do
     conn = fetch_query_params(conn)
-    assigns = %{conn: conn, params: conn.params, path: path}
+    assigns = build_assigns(conn, path_params)
     html = Layout.render(page, assigns)
 
     conn
@@ -61,6 +94,38 @@ defmodule Fractal.Router do
     exception ->
       Logger.error(Exception.format(:error, exception, __STACKTRACE__))
       render_error(conn, page, exception, __STACKTRACE__)
+  end
+
+  defp handle_post(conn, page, path_params) do
+    conn = conn |> Plug.Parsers.call(@parsers_opts) |> fetch_query_params()
+    assigns = build_assigns(conn, path_params)
+
+    case page.handle_post(assigns) do
+      {:redirect, to} when is_binary(to) ->
+        conn
+        |> put_resp_header("location", to)
+        |> send_resp(303, "")
+
+      {:render, extra_assigns} when is_map(extra_assigns) ->
+        html = Layout.render(page, Map.merge(assigns, extra_assigns))
+
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, html)
+
+      other ->
+        raise ArgumentError,
+              "#{inspect(page)}.handle_post/1 must return {:redirect, to} or " <>
+                "{:render, extra_assigns}, got: #{inspect(other)}"
+    end
+  rescue
+    exception ->
+      Logger.error(Exception.format(:error, exception, __STACKTRACE__))
+      render_error(conn, page, exception, __STACKTRACE__)
+  end
+
+  defp build_assigns(conn, path_params) do
+    %{conn: conn, params: Map.merge(conn.params, path_params), path: current_path(conn)}
   end
 
   defp render_error(conn, page, exception, stacktrace) do
@@ -74,9 +139,7 @@ defmodule Fractal.Router do
         HTML.tag(:h1, [], ["500 — page crashed"]),
         HTML.tag(:p, [], [
           HTML.tag(:code, [], [inspect(page)]),
-          " raised while rendering. Fix its ",
-          HTML.tag(:code, [], ["render/1"]),
-          " and run ",
+          " raised while handling this request. Fix it and run ",
           HTML.tag(:code, [], ["mix fractal.verify"]),
           "."
         ]),

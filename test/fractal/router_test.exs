@@ -23,6 +23,18 @@ defmodule Fractal.RouterTest do
     assert conn.resp_body =~ "AI-first web framework"
   end
 
+  test "POST on an unknown path renders a 404" do
+    conn = :post |> conn("/nowhere", %{}) |> Router.call(Router.init([]))
+
+    assert conn.status == 404
+  end
+
+  test "unsupported methods render a 404" do
+    conn = :put |> conn("/") |> Router.call(Router.init([]))
+
+    assert conn.status == 404
+  end
+
   test "GET on an unknown path renders a helpful 404" do
     conn = get("/does-not-exist")
 

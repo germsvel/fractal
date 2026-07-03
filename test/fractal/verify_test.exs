@@ -1,5 +1,7 @@
 defmodule Fractal.VerifyTest do
-  use ExUnit.Case, async: true
+  # DataCase: discovered pages include database-backed ones, which render
+  # real queries during verification
+  use Fractal.DataCase, async: true
 
   alias Fractal.Verify
 
@@ -52,6 +54,43 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: {:not, :renderable}
   end
 
+  defmodule PostDupA do
+    use Fractal.Page, path: "/verify-post-dup/a", post: "/verify-post-dup"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "a"
+
+    @impl Fractal.Page
+    def handle_post(_assigns), do: {:redirect, "/"}
+  end
+
+  defmodule PostDupB do
+    use Fractal.Page, path: "/verify-post-dup/b", post: "/verify-post-dup"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "b"
+
+    @impl Fractal.Page
+    def handle_post(_assigns), do: {:redirect, "/"}
+  end
+
+  # declares a post route but bypasses the compile-time handle_post check
+  defmodule SneakyPost do
+    @behaviour Fractal.Page
+
+    @impl Fractal.Page
+    def path, do: "/verify-sneaky-post"
+
+    @impl Fractal.Page
+    def title, do: "Sneaky post"
+
+    @impl Fractal.Page
+    def post_path, do: "/verify-sneaky-post"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
   test "the app's discovered pages pass verification" do
     results = Verify.run()
     assert Verify.ok?(results), inspect(Verify.errors(results))
@@ -71,10 +110,32 @@ defmodule Fractal.VerifyTest do
 
   test "detects duplicate routes" do
     results = Verify.run([DuplicateA, DuplicateB])
-    assert [{"routes are unique", {:error, message}}] = Verify.errors(results)
+    assert [{"GET routes are unique", {:error, message}}] = Verify.errors(results)
     assert message =~ "/verify-dup"
     assert message =~ "DuplicateA"
     assert message =~ "DuplicateB"
+  end
+
+  test "detects duplicate POST routes" do
+    results = Verify.run([PostDupA, PostDupB])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name == "POST routes are unique" and message =~ "/verify-post-dup"
+           end)
+  end
+
+  test "detects a post route without handle_post/1" do
+    results = Verify.run([SneakyPost])
+    errors = Verify.errors(results)
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "handles its post route" and message =~ "does not export handle_post/1"
+           end)
+  end
+
+  test "pending_migrations/0 passes on a migrated database" do
+    assert {"migrations are up", :ok} = Verify.pending_migrations()
   end
 
   test "detects a render that raises" do

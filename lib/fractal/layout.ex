@@ -29,6 +29,18 @@ defmodule Fractal.Layout do
   pre { background: rgba(255, 255, 255, 0.08); padding: 1rem; overflow-x: auto; }
   .lead { font-size: 1.15rem; color: #b8c0d9; }
   ul { padding-left: 1.25rem; }
+  .field { margin: 1rem 0; }
+  .field label { display: block; margin-bottom: 0.3rem; color: #b8c0d9; }
+  .field input, .field textarea {
+    width: 100%; padding: 0.5rem 0.65rem; border-radius: 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06);
+    color: #e6e9f2; font: inherit;
+  }
+  .field .error { color: #ff8787; margin: 0.3rem 0 0; font-size: 0.9rem; }
+  button[type="submit"] {
+    padding: 0.55rem 1.2rem; border-radius: 0.35rem; border: none;
+    background: #7cc4ff; color: #0b1021; font: inherit; font-weight: 600; cursor: pointer;
+  }
   """
 
   @live_reload_script """

@@ -30,6 +30,10 @@ defmodule Fractal.Pages.Home do
           " — scaffold a page and its test"
         ]),
         tag(:li, [], [
+          tag(:code, [], ["mix fractal.gen.resource Name field:type"]),
+          " — scaffold a schema, migration, and pages with a form"
+        ]),
+        tag(:li, [], [
           tag(:code, [], ["mix fractal.verify"]),
           " — run Fractal's verification checks and the test suite"
         ])

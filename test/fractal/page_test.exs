@@ -19,6 +19,16 @@ defmodule Fractal.PageTest do
     def render(_assigns), do: tag(:p, [], ["untitled"])
   end
 
+  defmodule WithPost do
+    use Fractal.Page, path: "/with-post/new", post: "/with-post"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:p, [], ["form"])
+
+    @impl Fractal.Page
+    def handle_post(assigns), do: {:redirect, "/with-post/" <> (assigns.params["n"] || "0")}
+  end
+
   test "path/0 and title/0 come from the use options" do
     assert Sample.path() == "/sample"
     assert Sample.title() == "Sample page"
@@ -61,6 +71,86 @@ defmodule Fractal.PageTest do
 
     refute error == :no_raise
     assert Exception.message(error) =~ "must declare a route"
+  end
+
+  test "post_path/0 defaults to nil and reflects the :post option" do
+    assert Sample.post_path() == nil
+    assert WithPost.post_path() == "/with-post"
+    assert Fractal.Page.post_path(Sample) == nil
+    assert Fractal.Page.post_path(WithPost) == "/with-post"
+  end
+
+  describe "match/2" do
+    test "matches static routes exactly" do
+      assert Fractal.Page.match("/about", ["about"]) == {:ok, %{}}
+      assert Fractal.Page.match("/", []) == {:ok, %{}}
+      assert Fractal.Page.match("/about", ["about", "team"]) == :error
+      assert Fractal.Page.match("/about", []) == :error
+    end
+
+    test "binds dynamic segments" do
+      assert Fractal.Page.match("/posts/:id", ["posts", "42"]) == {:ok, %{"id" => "42"}}
+
+      assert Fractal.Page.match("/a/:x/b/:y", ["a", "1", "b", "2"]) ==
+               {:ok, %{"x" => "1", "y" => "2"}}
+
+      assert Fractal.Page.match("/posts/:id", ["comments", "42"]) == :error
+    end
+  end
+
+  test "param_count/1 counts dynamic segments" do
+    assert Fractal.Page.param_count("/about") == 0
+    assert Fractal.Page.param_count("/posts/:id") == 1
+    assert Fractal.Page.param_count("/a/:x/:y") == 2
+  end
+
+  test "route?/1 validates route patterns" do
+    assert Fractal.Page.route?("/")
+    assert Fractal.Page.route?("/posts/:id")
+    refute Fractal.Page.route?("posts")
+    refute Fractal.Page.route?("/spa ce")
+    refute Fractal.Page.route?("/:123bad")
+    refute Fractal.Page.route?(nil)
+  end
+
+  test "declaring post: without handle_post/1 fails to compile" do
+    error =
+      try do
+        defmodule PostNoHandler do
+          use Fractal.Page, path: "/pnh/new", post: "/pnh"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not define handle_post/1"
+  end
+
+  test "defining handle_post/1 without post: fails to compile" do
+    error =
+      try do
+        defmodule HandlerNoPost do
+          use Fractal.Page, path: "/hnp"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_post(_assigns), do: {:redirect, "/"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not declare a post route"
   end
 
   test "compiling a page with a malformed path fails" do
