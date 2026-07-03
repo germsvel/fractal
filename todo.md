@@ -1,4 +1,4 @@
-# Task: build Fractal Elixir app
+# [Done] Task: build Fractal Elixir app
 
 ## Goal
 
@@ -36,7 +36,7 @@ Before changing anything, map the full plan and list the files
 you'll touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
-- [ ] I can launch a web server with a `mix` task and see a web page rendered
-- [ ] I can prompt an agent to create a new page, and it does so. In
+- [x] I can launch a web server with a `mix` task and see a web page rendered
+- [x] I can prompt an agent to create a new page, and it does so. In
 development, the page auto-reloads and I see the changes.
-- [ ] I can run all the testes with `mix test` and they pass
+- [x] I can run all the testes with `mix test` and they pass
