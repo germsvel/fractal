@@ -8,7 +8,6 @@ Ideas Backlog
 
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
-- [ ] Middleware to add across all pages
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
 - [ ] Better test helpers
@@ -25,3 +24,4 @@ Done
 - [x] CORS protection with sessions in /task5.md
 - [x] Assets in /task6.md
 - [x] UI components in /task7.md
+- [x] Middleware (or not middleware) in /task8.md
