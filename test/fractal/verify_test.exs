@@ -427,6 +427,59 @@ defmodule Fractal.VerifyTest do
       assert message =~ "no test file references"
       assert message =~ "test/fractal/pages/good_page_test.exs"
     end
+
+    @tag :tmp_dir
+    test "commented-out tests don't count as coverage", %{tmp_dir: tmp_dir} do
+      File.cd!(tmp_dir, fn ->
+        File.mkdir_p!("test/fractal/pages")
+
+        # the module name appears, but only in comments — same as no test
+        File.write!("test/fractal/pages/good_page_test.exs", """
+        # defmodule Fractal.VerifyTest.GoodPageTest do
+        #   use ExUnit.Case
+        #
+        #   test "renders" do
+        #     assert Fractal.VerifyTest.GoodPage.path() == "/verify-good"
+        #   end
+        # end
+        """)
+
+        assert [{_name, {:error, message}}] = Verify.errors(Verify.test_coverage([GoodPage]))
+        assert message =~ "no test file references"
+
+        # uncommented, the same content counts
+        File.write!("test/fractal/pages/good_page_test.exs", """
+        defmodule Fractal.VerifyTest.GoodPageTest do
+          use ExUnit.Case
+
+          test "renders" do
+            assert Fractal.VerifyTest.GoodPage.path() == "/verify-good"
+          end
+        end
+        """)
+
+        assert Verify.ok?(Verify.test_coverage([GoodPage]))
+      end)
+    end
+
+    @tag :tmp_dir
+    test "multi-alias references count as coverage", %{tmp_dir: tmp_dir} do
+      File.cd!(tmp_dir, fn ->
+        File.mkdir_p!("test/fractal/pages")
+
+        File.write!("test/fractal/pages/grouped_test.exs", """
+        defmodule Fractal.VerifyTest.GroupedTest do
+          use ExUnit.Case
+
+          alias Fractal.VerifyTest.{DuplicateA, GoodPage}
+
+          test "uses them", do: assert(GoodPage.path() != DuplicateA.path())
+        end
+        """)
+
+        assert Verify.ok?(Verify.test_coverage([GoodPage, DuplicateA]))
+      end)
+    end
   end
 
   describe "guards" do

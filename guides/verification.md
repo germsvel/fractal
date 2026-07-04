@@ -82,8 +82,9 @@ verification stays outside the file it verifies.
 
 ## Test coverage is enforced
 
-Every page and component must be referenced by at least one test file —
-`mix fractal.verify` fails otherwise, naming the module and the
-conventional test path. The generators scaffold test files; a hand-written
+Every page and component must be referenced **in code** by at least one
+test file — `mix fractal.verify` fails otherwise, naming the module and
+the conventional test path. Test files are parsed, not grepped:
+commented-out tests are the same as no tests. The generators scaffold test files; a hand-written
 page must bring its own. This check enforces existence, not quality — the
 testing conventions above describe what good page tests cover.

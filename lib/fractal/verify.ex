@@ -107,15 +107,12 @@ defmodule Fractal.Verify do
   """
   @spec test_coverage([module()]) :: [result()]
   def test_coverage(modules \\ Router.pages() ++ Fractal.Component.all()) do
-    blob =
-      "test/**/*_test.exs"
-      |> Path.wildcard()
-      |> Enum.map_join("\n", &File.read!/1)
+    referenced = referenced_in_tests()
 
     Enum.map(modules, fn module ->
       name = "#{inspect(module)} has tests"
 
-      if String.contains?(blob, inspect(module)) do
+      if MapSet.member?(referenced, module) do
         {name, :ok}
       else
         kind = if Fractal.Component.component?(module), do: "components", else: "pages"
@@ -128,6 +125,50 @@ defmodule Fractal.Verify do
             "see the testing conventions in the guides)"}}
       end
     end)
+  end
+
+  # Modules referenced *in code* by any test file. Files are parsed to
+  # their AST, so comments don't count — a fully commented-out test is
+  # the same as no test. Handles multi-alias (alias A.{B, C}) too.
+  defp referenced_in_tests do
+    "test/**/*_test.exs"
+    |> Path.wildcard()
+    |> Enum.flat_map(&file_module_references/1)
+    |> MapSet.new()
+  end
+
+  defp file_module_references(file) do
+    case Code.string_to_quoted(File.read!(file)) do
+      {:ok, ast} -> collect_module_references(ast)
+      {:error, _reason} -> []
+    end
+  end
+
+  defp collect_module_references(ast) do
+    {_ast, modules} =
+      Macro.prewalk(ast, [], fn
+        {:__aliases__, _meta, parts} = node, acc ->
+          if Enum.all?(parts, &is_atom/1) do
+            {node, [Module.concat(parts) | acc]}
+          else
+            {node, acc}
+          end
+
+        # alias Fractal.Pages.{Post, Posts}
+        {{:., _, [{:__aliases__, _, base}, :{}]}, _meta, tails} = node, acc ->
+          expanded =
+            for {:__aliases__, _, tail} <- tails,
+                Enum.all?(base ++ tail, &is_atom/1) do
+              Module.concat(base ++ tail)
+            end
+
+          {node, expanded ++ acc}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    modules
   end
 
   @doc "Runs all checks against `pages` (defaults to the discovered pages)."
