@@ -6,7 +6,9 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Separate framework from sample app
+- [ ] Separate framework from sample app task 10
+- [ ] Add meta data in HTML in task 11
+- [ ] Add installer task 12
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
 - [ ] Prompting from the page itself? (can we embed)
