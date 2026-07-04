@@ -348,6 +348,67 @@ defmodule Fractal.VerifyTest do
     refute inspect(Fractal.Components.EmptyState) in Verify.unused_components()
   end
 
+  defmodule UndefinedGuardPage do
+    use Fractal.Page, path: "/verify-undefined-guard", require: :no_such_guard
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
+  defmodule UnguardedAdminPage do
+    use Fractal.Page, path: "/admin/verify-sneaky"
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
+  describe "guards" do
+    test "detects require: of an undefined guard, naming the fix" do
+      results = Verify.run([UndefinedGuardPage])
+      errors = Verify.errors(results)
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "requires defined guards" and message =~ ":no_such_guard" and
+                 message =~ "guard :no_such_guard do"
+             end)
+    end
+
+    test "expectations fail pages under a protected prefix that skip the guard" do
+      results = Verify.run([UnguardedAdminPage])
+      errors = Verify.errors(results)
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name == "guard expectations are honored" and
+                 message =~ "UnguardedAdminPage" and
+                 message =~ "require: :signed_in"
+             end)
+    end
+
+    test "the guarded admin page honors the expectation" do
+      results = Verify.run([Fractal.Pages.Admin])
+      assert Verify.ok?(results), inspect(Verify.errors(results))
+    end
+
+    test "guards/0 smoke-runs every guard and the context with empty assigns" do
+      results = Verify.guards()
+
+      assert Verify.ok?(results), inspect(Verify.errors(results))
+
+      assert Enum.any?(results, fn {name, _} ->
+               name =~ "guard :signed_in tolerates an empty session"
+             end)
+
+      assert Enum.any?(results, fn {name, _} ->
+               name =~ "context tolerates an empty session"
+             end)
+    end
+
+    test "unused_guards/0 only reports guards nothing uses" do
+      # :signed_in is required by the admin page and expected under /admin
+      refute :signed_in in Verify.unused_guards()
+    end
+  end
+
   test "detects unbalanced braces in style/0" do
     results = Verify.run([BadStyle])
     errors = Verify.errors(results)

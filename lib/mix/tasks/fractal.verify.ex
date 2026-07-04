@@ -28,8 +28,8 @@ defmodule Mix.Tasks.Fractal.Verify do
       [
         Fractal.Verify.secret_key(),
         Fractal.Verify.stylesheet(),
-        Fractal.Verify.pending_migrations() | Fractal.Verify.run()
-      ] ++ Fractal.Verify.run_components()
+        Fractal.Verify.pending_migrations() | Fractal.Verify.guards()
+      ] ++ Fractal.Verify.run() ++ Fractal.Verify.run_components()
 
     Enum.each(results, fn
       {name, :ok} -> Mix.shell().info("✓ #{name}")
@@ -56,6 +56,17 @@ defmodule Mix.Tasks.Fractal.Verify do
       unused ->
         Mix.shell().info(
           "\nℹ components no page renders (not a failure): " <> Enum.join(unused, ", ")
+        )
+    end
+
+    case Fractal.Verify.unused_guards() do
+      [] ->
+        :ok
+
+      unused ->
+        Mix.shell().info(
+          "\nℹ guards no page requires (not a failure): " <>
+            Enum.map_join(unused, ", ", &inspect/1)
         )
     end
 

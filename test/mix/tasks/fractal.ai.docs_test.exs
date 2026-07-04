@@ -19,6 +19,9 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     assert output =~ "component inventory"
     assert output =~ "Fractal.Components.EmptyState"
     assert output =~ "example assigns:"
+    assert output =~ "guard inventory"
+    assert output =~ ":signed_in"
+    assert output =~ "every page under /admin must declare require: :signed_in"
   end
 
   @tag :tmp_dir

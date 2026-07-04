@@ -19,6 +19,8 @@ defmodule Fractal.Verify do
     * declared events are unique non-empty strings and `handle_event/2`
       is exported when a page declares any
     * `style/0` (when defined) returns well-formed CSS (balanced braces)
+    * every `require:` names a defined guard, and every `expect/2`
+      declaration is honored by every matching page (see `Fractal.Guard`)
     * every page's `render/1` runs without raising (with empty params
       and session) and returns renderable content — which also catches
       references to missing assets, since `asset_path/1` raises
@@ -65,7 +67,11 @@ defmodule Fractal.Verify do
         check_unique_routes(pages, method_name(action), &Page.action_route(&1, action))
       end
 
-    [check_pages_exist(pages), check_unique_routes(pages, "GET", & &1.path())] ++
+    [
+      check_pages_exist(pages),
+      check_unique_routes(pages, "GET", & &1.path()),
+      check_expectations(pages)
+    ] ++
       action_uniqueness ++ Enum.flat_map(pages, &check_page/1)
   end
 
@@ -103,6 +109,78 @@ defmodule Fractal.Verify do
        {:error,
         "could not check migrations (is the database running? try `mix ecto.setup`): " <>
           Exception.message(exception)}}
+  end
+
+  @doc """
+  Checks the guards module: at most one exists, every guard smoke-runs
+  with empty assigns (returning `:ok` or a redirect, never crashing),
+  and `context/1` tolerates an empty session.
+  """
+  @spec guards() :: [result()]
+  def guards do
+    case Fractal.Guard.modules() do
+      [] ->
+        [{"guards are well-formed", :ok}]
+
+      [_single] ->
+        assigns = %{conn: nil, params: %{}, session: %{}, path: "/", context: %{}}
+
+        [check_context(assigns) | Enum.map(Fractal.Guard.names(), &check_guard(&1, assigns))]
+
+      many ->
+        [
+          {"guards are well-formed",
+           {:error,
+            "found #{length(many)} guards modules (#{Enum.map_join(many, ", ", &inspect/1)}) — " <>
+              "cross-cutting behavior lives in exactly one"}}
+        ]
+    end
+  end
+
+  defp check_context(assigns) do
+    name = "guard context tolerates an empty session"
+
+    result =
+      try do
+        case Fractal.Guard.context(assigns) do
+          context when is_map(context) -> :ok
+          other -> {:error, "context/1 must return a map, got: #{inspect(other)}"}
+        end
+      rescue
+        exception -> {:error, "context/1 raised: #{Exception.message(exception)}"}
+      end
+
+    {name, result}
+  end
+
+  defp check_guard(guard_name, assigns) do
+    name = "guard #{inspect(guard_name)} tolerates an empty session"
+
+    result =
+      try do
+        assigns = Map.put(assigns, :context, Fractal.Guard.context(assigns))
+
+        case Fractal.Guard.run([guard_name], assigns) do
+          :ok -> :ok
+          {:redirect, to, _directives} when is_binary(to) -> :ok
+        end
+      rescue
+        exception -> {:error, "the guard raised: #{Exception.message(exception)}"}
+      end
+
+    {name, result}
+  end
+
+  @doc """
+  Guards no page requires. Informational — reported by
+  `mix fractal.verify`, but not a failure.
+  """
+  @spec unused_guards() :: [atom()]
+  def unused_guards do
+    required = Enum.flat_map(Router.pages(), &Page.requires/1)
+    expected = Enum.map(Fractal.Guard.expectations(), fn {_prefix, guard} -> guard end)
+
+    Fractal.Guard.names() -- (required ++ expected)
   end
 
   @doc """
@@ -234,9 +312,57 @@ defmodule Fractal.Verify do
       action_checks ++
       [
         {"#{inspect(page)} handles its events", validate_events(page)},
+        {"#{inspect(page)} requires defined guards", validate_requires(page)},
         {"#{inspect(page)} declares valid styles", validate_style(page)},
         {"#{inspect(page)} renders", validate_render(page)}
       ]
+  end
+
+  # expectations turn "every /admin page must be guarded" into a
+  # verification contract instead of hidden runtime behavior
+  defp check_expectations(pages) do
+    name = "guard expectations are honored"
+
+    violations =
+      for {prefix, guard} <- Fractal.Guard.expectations(),
+          page <- pages,
+          path = safe_route(page, & &1.path()),
+          path != nil and Fractal.Guard.under?(path, prefix),
+          guard not in Page.requires(page) do
+        "#{inspect(page)} (#{path}) must declare require: #{inspect(guard)}"
+      end
+
+    case violations do
+      [] -> {name, :ok}
+      violations -> {name, {:error, Enum.join(violations, "; ")}}
+    end
+  end
+
+  defp validate_requires(page) do
+    requires = Page.requires(page)
+
+    cond do
+      requires == [] ->
+        :ok
+
+      Fractal.Guard.module() == nil ->
+        {:error,
+         "requires guards #{inspect(requires)} but no guards module exists — " <>
+           "create lib/fractal/guards.ex with `use Fractal.Guard`"}
+
+      true ->
+        case Enum.reject(requires, &(&1 in Fractal.Guard.names())) do
+          [] ->
+            :ok
+
+          missing ->
+            {:error,
+             "requires undefined guard(s) #{inspect(missing)} — define them in " <>
+               "#{inspect(Fractal.Guard.module())} with `guard #{inspect(hd(missing))} do ... end`"}
+        end
+    end
+  rescue
+    exception -> {:error, "requires/0 raised: #{Exception.message(exception)}"}
   end
 
   defp validate_path(page) do
@@ -309,6 +435,7 @@ defmodule Fractal.Verify do
       conn: nil,
       params: %{},
       session: %{},
+      context: %{},
       flash: %{},
       path: safe_route(page, & &1.path()) || "/"
     }

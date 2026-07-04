@@ -19,6 +19,8 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
       `Fractal.Interactive`)
     * `--style` — include a scaffold `style/0` (page-scoped CSS; see
       `guides/assets.md`)
+    * `--require` — comma-separated guard names the page requires (see
+      `Fractal.Guard`)
 
   After generating, edit `render/1` (and the event handlers) and run
   `mix fractal.verify`.
@@ -30,7 +32,13 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
   def run(args) do
     {opts, argv, _errors} =
       OptionParser.parse(args,
-        strict: [path: :string, title: :string, events: :string, style: :boolean]
+        strict: [
+          path: :string,
+          title: :string,
+          events: :string,
+          style: :boolean,
+          require: :string
+        ]
       )
 
     name =
@@ -60,16 +68,18 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     end)
 
     style = if opts[:style], do: style_scaffold(), else: ""
+    use_suffix = require_option(opts[:require])
 
     {page_contents, test_contents} =
       case events do
         [] ->
-          {page_template(module, route, title, style), test_template(module, route, title)}
+          {page_template(module, route, title, style, use_suffix),
+           test_template(module, route, title)}
 
         events ->
           region = String.replace(file_base, "_", "-") <> "-region"
 
-          {interactive_page_template(module, route, title, events, region, style),
+          {interactive_page_template(module, route, title, events, region, style, use_suffix),
            interactive_test_template(module, route, title, events, region)}
       end
 
@@ -102,6 +112,21 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     file_base |> String.replace("_", " ") |> String.capitalize()
   end
 
+  defp require_option(nil), do: ""
+
+  defp require_option(names) do
+    case names |> String.split(",", trim: true) |> Enum.map(&String.trim/1) do
+      [] ->
+        Mix.raise("--require must be a comma-separated list of guard names")
+
+      [single] ->
+        ", require: :#{single}"
+
+      many ->
+        ", require: [#{Enum.map_join(many, ", ", &":#{&1}")}]"
+    end
+  end
+
   defp style_scaffold do
     """
 
@@ -115,12 +140,12 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     """
   end
 
-  defp page_template(module, route, title, style) do
+  defp page_template(module, route, title, style, use_suffix) do
     """
     defmodule #{module} do
       @moduledoc "The #{title} page, served at #{route}."
 
-      use Fractal.Page, path: "#{route}", title: "#{title}"
+      use Fractal.Page, path: "#{route}", title: "#{title}"#{use_suffix}
 
       @impl Fractal.Page
       def render(_assigns) do
@@ -162,7 +187,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     """
   end
 
-  defp interactive_page_template(module, route, title, events, region, style) do
+  defp interactive_page_template(module, route, title, events, region, style, use_suffix) do
     events_list = Enum.map_join(events, ", ", &inspect/1)
 
     handlers =
@@ -184,7 +209,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     defmodule #{module} do
       @moduledoc "The #{title} page, served at #{route} — interactive, see Fractal.Interactive."
 
-      use Fractal.Page, path: "#{route}", title: "#{title}", events: [#{events_list}]
+      use Fractal.Page, path: "#{route}", title: "#{title}", events: [#{events_list}]#{use_suffix}
 
       @impl Fractal.Page
       def render(_assigns) do

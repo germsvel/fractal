@@ -35,6 +35,10 @@ defmodule Fractal.Page do
     * `:delete` (optional) — a destroy route handled by `handle_delete/1`.
     * `:events` (optional) — the interactive events this page handles
       with `handle_event/2`. See `Fractal.Interactive`.
+    * `:require` (optional) — a guard name (or list of them) that must
+      pass before this page renders or handles anything, including
+      events. Guards are defined once, in the app's guards module. See
+      `Fractal.Guard`.
 
   ## Styles
 
@@ -131,6 +135,8 @@ defmodule Fractal.Page do
     * `:params` — merged path, query, and (for non-GET) body parameters,
       all string-keyed
     * `:session` — the session, a string-keyed map
+    * `:context` — request-scoped derivations (e.g. the current user)
+      from the guards module's `context/1`; empty when none is defined
     * `:path` — the request path
     * `:conn` — the raw `Plug.Conn` (or `nil` outside a request, e.g.
       during verification — `render/1` must not crash when params and
@@ -156,6 +162,7 @@ defmodule Fractal.Page do
   @callback delete_path() :: String.t() | nil
   @callback events() :: [String.t()]
   @callback style() :: String.t()
+  @callback requires() :: [atom()]
   @callback render(assigns :: map()) :: Fractal.HTML.Safe.t() | iodata()
   @callback handle_post(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_put(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
@@ -168,6 +175,7 @@ defmodule Fractal.Page do
                       delete_path: 0,
                       events: 0,
                       style: 0,
+                      requires: 0,
                       handle_post: 1,
                       handle_put: 1,
                       handle_delete: 1,
@@ -189,6 +197,7 @@ defmodule Fractal.Page do
       @fractal_page_put Keyword.get(opts, :put)
       @fractal_page_delete Keyword.get(opts, :delete)
       @fractal_page_events Keyword.get(opts, :events, [])
+      @fractal_page_requires opts |> Keyword.get(:require, []) |> List.wrap()
       @before_compile Fractal.Page
     end
   end
@@ -203,8 +212,10 @@ defmodule Fractal.Page do
       end
 
     events = Module.get_attribute(env.module, :fractal_page_events)
+    requires = Module.get_attribute(env.module, :fractal_page_requires)
 
     validate_path!(env.module, path)
+    validate_requires!(env.module, requires)
 
     for {action, route} <- actions do
       if route, do: validate_action_route!(env.module, action, route)
@@ -221,7 +232,13 @@ defmodule Fractal.Page do
 
     title = title || default_title(env.module)
 
-    quote bind_quoted: [path: path, title: title, actions: actions, events: events] do
+    quote bind_quoted: [
+            path: path,
+            title: title,
+            actions: actions,
+            events: events,
+            requires: requires
+          ] do
       @impl Fractal.Page
       def path, do: unquote(path)
 
@@ -230,6 +247,9 @@ defmodule Fractal.Page do
 
       @impl Fractal.Page
       def events, do: unquote(events)
+
+      @impl Fractal.Page
+      def requires, do: unquote(requires)
 
       for {action, route} <- actions do
         @impl Fractal.Page
@@ -321,6 +341,26 @@ defmodule Fractal.Page do
   @spec events(module()) :: [String.t()]
   def events(module) do
     if function_exported?(module, :events, 0), do: module.events(), else: []
+  end
+
+  @doc false
+  def validate_requires!(module, requires) do
+    valid? =
+      is_list(requires) and
+        Enum.all?(requires, &(is_atom(&1) and not is_nil(&1) and not is_boolean(&1))) and
+        Enum.uniq(requires) == requires
+
+    unless valid? do
+      raise ArgumentError,
+            "#{inspect(module)} has an invalid require: #{inspect(requires)} — " <>
+              "it must be a guard name or a list of unique guard names (atoms)"
+    end
+  end
+
+  @doc "Returns the guards `module` requires (works for any page)."
+  @spec requires(module()) :: [atom()]
+  def requires(module) do
+    if function_exported?(module, :requires, 0), do: module.requires(), else: []
   end
 
   @doc "Returns the page's `style/0` CSS, or `nil` (works for any page)."

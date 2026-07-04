@@ -70,6 +70,20 @@ defmodule Mix.Tasks.Fractal.Gen.PageTest do
     end)
   end
 
+  @tag :tmp_dir
+  test "scaffolds guarded pages with --require", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      Mix.Tasks.Fractal.Gen.Page.run(["Secret", "--require", "signed_in"])
+      Mix.Tasks.Fractal.Gen.Page.run(["TopSecret", "--require", "signed_in,admin"])
+
+      single = File.read!("lib/fractal/pages/secret.ex")
+      assert single =~ ~s{use Fractal.Page, path: "/secret", title: "Secret", require: :signed_in}
+
+      multi = File.read!("lib/fractal/pages/top_secret.ex")
+      assert multi =~ "require: [:signed_in, :admin]"
+    end)
+  end
+
   test "rejects malformed --events" do
     assert_raise Mix.Error, ~r/--events/, fn ->
       Mix.Tasks.Fractal.Gen.Page.run(["Bad", "--events", "a,a"])

@@ -25,6 +25,17 @@ defmodule Fractal.Router do
   interactivity runtime attach automatically — a request without one is
   rejected with a 403 explaining the convention.
 
+  ## Guards and context
+
+  Pages declaring `require:` have their guards run before `render/1`,
+  every `handle_*/1`, and every interactive event — a denied request
+  gets the guard's redirect (see `Fractal.Guard`). Every request's
+  assigns carry `:context`, derived once by the guards module's
+  `context/1`. Responses carry secure default headers, overridable via
+  `config :fractal, :response_headers`. The router emits
+  `[:fractal, :request, :stop]` telemetry (and `Fractal.Guard` emits
+  `[:fractal, :guard, :denied]`).
+
   Interactive events (see `Fractal.Interactive`) arrive as
   `POST /fractal/event` with `_fx_path` (the page's location) and
   `_fx_event`; the router dispatches them to the page's
@@ -41,7 +52,7 @@ defmodule Fractal.Router do
 
   require Logger
 
-  alias Fractal.{HTML, Layout, LiveReload, Page}
+  alias Fractal.{Guard, HTML, Layout, LiveReload, Page}
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
   @static_opts Plug.Static.init(
@@ -61,6 +72,13 @@ defmodule Fractal.Router do
 
   @methods %{"POST" => :post, "PUT" => :put, "PATCH" => :put, "DELETE" => :delete}
 
+  # merged with (and overridable by) config :fractal, :response_headers
+  @default_headers %{
+    "x-content-type-options" => "nosniff",
+    "x-frame-options" => "SAMEORIGIN",
+    "referrer-policy" => "strict-origin-when-cross-origin"
+  }
+
   @flash_key "_fractal_flash"
   @directives [:session, :clear_session, :flash]
 
@@ -78,14 +96,33 @@ defmodule Fractal.Router do
   def init(opts), do: opts
 
   @impl Plug
-  def call(%Plug.Conn{method: "GET", path_info: ["fractal", "reload"]} = conn, _opts) do
+  def call(conn, opts) do
+    start = System.monotonic_time()
+    conn = conn |> put_default_headers() |> dispatch(opts)
+
+    :telemetry.execute(
+      [:fractal, :request, :stop],
+      %{duration: System.monotonic_time() - start},
+      %{method: conn.method, path: conn.request_path, status: conn.status}
+    )
+
+    conn
+  end
+
+  defp put_default_headers(conn) do
+    @default_headers
+    |> Map.merge(Application.get_env(:fractal, :response_headers, %{}))
+    |> Enum.reduce(conn, fn {name, value}, conn -> put_resp_header(conn, name, value) end)
+  end
+
+  defp dispatch(%Plug.Conn{method: "GET", path_info: ["fractal", "reload"]} = conn, _opts) do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(200, ~s({"token":#{LiveReload.token()}}))
   end
 
   # the CSS bundle: assets/app.css + every page's scoped style/0
-  def call(%Plug.Conn{method: "GET", path_info: ["fractal", "assets", name]} = conn, _opts) do
+  defp dispatch(%Plug.Conn{method: "GET", path_info: ["fractal", "assets", name]} = conn, _opts) do
     if String.ends_with?(name, ".css") do
       {_hash, css} = Fractal.Assets.css_bundle()
 
@@ -99,7 +136,7 @@ defmodule Fractal.Router do
   end
 
   # the component gallery — development only
-  def call(%Plug.Conn{method: "GET", path_info: ["fractal", "components"]} = conn, _opts) do
+  defp dispatch(%Plug.Conn{method: "GET", path_info: ["fractal", "components"]} = conn, _opts) do
     if dev_mode?() do
       conn
       |> put_resp_content_type("text/html")
@@ -110,7 +147,7 @@ defmodule Fractal.Router do
   end
 
   # files under assets/static/, referenced via Fractal.Assets.asset_path/1
-  def call(%Plug.Conn{method: "GET", path_info: ["assets" | _rest]} = conn, _opts) do
+  defp dispatch(%Plug.Conn{method: "GET", path_info: ["assets" | _rest]} = conn, _opts) do
     conn = Plug.Static.call(conn, @static_opts)
 
     if conn.halted do
@@ -120,7 +157,7 @@ defmodule Fractal.Router do
     end
   end
 
-  def call(%Plug.Conn{method: "GET"} = conn, _opts) do
+  defp dispatch(%Plug.Conn{method: "GET"} = conn, _opts) do
     # the CSRF plug only seeds the token on GET (it can still reject
     # cross-origin JavaScript requests)
     case conn |> fetch_query_params() |> session_pipeline() do
@@ -135,7 +172,7 @@ defmodule Fractal.Router do
     end
   end
 
-  def call(%Plug.Conn{method: "POST", path_info: ["fractal", "event"]} = conn, _opts) do
+  defp dispatch(%Plug.Conn{method: "POST", path_info: ["fractal", "event"]} = conn, _opts) do
     conn = conn |> Plug.Parsers.call(@parsers_opts) |> fetch_query_params()
 
     case session_pipeline(conn) do
@@ -144,8 +181,8 @@ defmodule Fractal.Router do
     end
   end
 
-  def call(%Plug.Conn{method: method} = conn, _opts)
-      when method in ["POST", "PUT", "PATCH", "DELETE"] do
+  defp dispatch(%Plug.Conn{method: method} = conn, _opts)
+       when method in ["POST", "PUT", "PATCH", "DELETE"] do
     # parse the body first: a POST may carry a hidden _method field that
     # rewrites it to PUT/PATCH/DELETE
     conn =
@@ -168,7 +205,7 @@ defmodule Fractal.Router do
     end
   end
 
-  def call(conn, _opts), do: not_found(conn, current_path(conn))
+  defp dispatch(conn, _opts), do: not_found(conn, current_path(conn))
 
   @doc "All discovered page modules, sorted by path."
   @spec pages() :: [module()]
@@ -258,11 +295,21 @@ defmodule Fractal.Router do
   defp render_page(conn, page, path_params) do
     {flash, conn} = pop_flash(conn)
     assigns = conn |> build_assigns(path_params) |> Map.put(:flash, flash)
-    html = Layout.render(page, assigns)
 
-    conn
-    |> put_resp_content_type("text/html")
-    |> send_resp(200, html)
+    case Guard.run(Page.requires(page), assigns) do
+      :ok ->
+        html = Layout.render(page, assigns)
+
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(200, html)
+
+      {:redirect, to, directives} ->
+        conn
+        |> apply_directives(directives)
+        |> put_resp_header("location", to)
+        |> send_resp(303, "")
+    end
   rescue
     exception ->
       Logger.error(Exception.format(:error, exception, __STACKTRACE__))
@@ -272,7 +319,13 @@ defmodule Fractal.Router do
   defp handle_action(conn, page, action, path_params) do
     assigns = build_assigns(conn, path_params)
 
-    case normalize_result(page, "handle_#{action}/1", apply(page, :"handle_#{action}", [assigns])) do
+    result =
+      case Guard.run(Page.requires(page), assigns) do
+        :ok -> apply(page, :"handle_#{action}", [assigns])
+        {:redirect, _to, _directives} = denied -> denied
+      end
+
+    case normalize_result(page, "handle_#{action}/1", result) do
       {:redirect, to, directives} when is_binary(to) ->
         conn
         |> apply_directives(directives)
@@ -299,15 +352,23 @@ defmodule Fractal.Router do
       |> Map.drop(["_fx_path", "_fx_event"])
       |> Map.merge(path_params)
 
-    assigns = %{
-      conn: conn,
-      params: params,
-      path: conn.params["_fx_path"],
-      event: event,
-      session: page_session(conn)
-    }
+    assigns =
+      %{
+        conn: conn,
+        params: params,
+        path: conn.params["_fx_path"],
+        event: event,
+        session: page_session(conn)
+      }
+      |> put_context()
 
-    case normalize_result(page, "handle_event/2", page.handle_event(event, assigns)) do
+    result =
+      case Guard.run(Page.requires(page), assigns) do
+        :ok -> page.handle_event(event, assigns)
+        {:redirect, _to, _directives} = denied -> denied
+      end
+
+    case normalize_result(page, "handle_event/2", result) do
       {:fragment, content, directives} ->
         conn
         |> apply_directives(directives)
@@ -406,7 +467,10 @@ defmodule Fractal.Router do
       path: current_path(conn),
       session: page_session(conn)
     }
+    |> put_context()
   end
+
+  defp put_context(assigns), do: Map.put(assigns, :context, Guard.context(assigns))
 
   defp render_error(conn, page, exception, stacktrace) do
     details =
