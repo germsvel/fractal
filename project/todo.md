@@ -6,8 +6,6 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Should each page have a verify? function that verifies itself? (thinking
-  of extensions) -- Going with Invariants in /task9.md
 - [ ] Separate framework from sample app
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
@@ -28,3 +26,5 @@ Done
 - [x] Assets in /task6.md
 - [x] UI components in /task7.md
 - [x] Middleware (or not middleware) in /task8.md
+- [x] Should each page have a verify? function that verifies itself? (thinking
+  of extensions) -- Going with Invariants in /task9.md
