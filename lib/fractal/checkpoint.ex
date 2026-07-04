@@ -1,4 +1,4 @@
-defmodule Fractal.Guard do
+defmodule Fractal.Checkpoint do
   @moduledoc """
   Cross-cutting request behavior: guards, expectations, and context.
 
@@ -12,9 +12,9 @@ defmodule Fractal.Guard do
       # the page says it — visible in the one file that matters
       use Fractal.Page, path: "/admin", title: "Admin", require: :signed_in
 
-      # lib/fractal/guards.ex — the ONE module defining what names mean
-      defmodule Fractal.Guards do
-        use Fractal.Guard
+      # lib/fractal/checkpoints.ex — the ONE module defining what names mean
+      defmodule Fractal.Checkpoints do
+        use Fractal.Checkpoint
 
         def context(assigns) do
           %{"user_name" => assigns.session["user_name"]}
@@ -67,17 +67,17 @@ defmodule Fractal.Guard do
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
       if opts != [] do
-        raise ArgumentError, "use Fractal.Guard takes no options"
+        raise ArgumentError, "use Fractal.Checkpoint takes no options"
       end
 
-      @behaviour Fractal.Guard
+      @behaviour Fractal.Checkpoint
 
-      import Fractal.Guard, only: [guard: 2, expect: 2]
+      import Fractal.Checkpoint, only: [guard: 2, expect: 2]
 
       Module.register_attribute(__MODULE__, :fractal_guard_names, accumulate: true)
       Module.register_attribute(__MODULE__, :fractal_expectations, accumulate: true)
 
-      @before_compile Fractal.Guard
+      @before_compile Fractal.Checkpoint
 
       def context(_assigns), do: %{}
       defoverridable context: 1
@@ -148,7 +148,7 @@ defmodule Fractal.Guard do
 
   # -- discovery and the runner ------------------------------------------
 
-  @doc "The app's guards module, or `nil` (there should be at most one)."
+  @doc "The app's checkpoint module, or `nil` (there should be at most one)."
   @spec module() :: module() | nil
   def module, do: modules() |> List.first()
 
@@ -156,13 +156,13 @@ defmodule Fractal.Guard do
   @spec modules() :: [module()]
   def modules do
     Fractal.Discovery.modules()
-    |> Enum.filter(&guard_module?/1)
+    |> Enum.filter(&checkpoint_module?/1)
     |> Enum.sort_by(&inspect/1)
   end
 
-  @doc "Returns `true` if `module` is a compiled guards module."
-  @spec guard_module?(module()) :: boolean()
-  def guard_module?(module) do
+  @doc "Returns `true` if `module` is a compiled checkpoint module."
+  @spec checkpoint_module?(module()) :: boolean()
+  def checkpoint_module?(module) do
     Code.ensure_loaded?(module) and
       function_exported?(module, :__fractal_guards__, 0) and
       __MODULE__ in behaviours(module)
@@ -186,7 +186,7 @@ defmodule Fractal.Guard do
     end
   end
 
-  @doc "The app-defined request context (empty when no guards module exists)."
+  @doc "The app-defined request context (empty when no checkpoint module exists)."
   @spec context(map()) :: map()
   def context(assigns) do
     case module() do
@@ -199,7 +199,7 @@ defmodule Fractal.Guard do
   Runs the named guards in order; the first non-`:ok` result wins.
 
   Returns `:ok` or `{:redirect, to, directives}`. Raises when a guard
-  is undefined or a guards module is missing — a page requiring guards
+  is undefined or a checkpoint module is missing — a page requiring guards
   fails closed, never open (verification catches this before runtime).
   """
   @spec run([atom()], map()) :: :ok | {:redirect, String.t(), keyword()}
@@ -208,8 +208,8 @@ defmodule Fractal.Guard do
   def run(names, assigns) do
     mod =
       module() ||
-        raise "pages require guards #{inspect(names)} but there is no guards module — " <>
-                "create lib/fractal/guards.ex with `use Fractal.Guard`"
+        raise "pages require guards #{inspect(names)} but there is no checkpoint module — " <>
+                "create lib/fractal/checkpoints.ex with `use Fractal.Checkpoint`"
 
     Enum.reduce_while(names, :ok, fn name, :ok ->
       case mod.check(name, assigns) do
@@ -231,7 +231,7 @@ defmodule Fractal.Guard do
   end
 
   defp denied(name, to, directives, assigns) do
-    :telemetry.execute([:fractal, :guard, :denied], %{count: 1}, %{
+    :telemetry.execute([:fractal, :checkpoint, :denied], %{count: 1}, %{
       guard: name,
       path: assigns[:path]
     })

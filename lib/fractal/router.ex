@@ -29,12 +29,12 @@ defmodule Fractal.Router do
 
   Pages declaring `require:` have their guards run before `render/1`,
   every `handle_*/1`, and every interactive event — a denied request
-  gets the guard's redirect (see `Fractal.Guard`). Every request's
-  assigns carry `:context`, derived once by the guards module's
+  gets the guard's redirect (see `Fractal.Checkpoint`). Every request's
+  assigns carry `:context`, derived once by the checkpoint module's
   `context/1`. Responses carry secure default headers, overridable via
   `config :fractal, :response_headers`. The router emits
-  `[:fractal, :request, :stop]` telemetry (and `Fractal.Guard` emits
-  `[:fractal, :guard, :denied]`).
+  `[:fractal, :request, :stop]` telemetry (and `Fractal.Checkpoint` emits
+  `[:fractal, :checkpoint, :denied]`).
 
   Interactive events (see `Fractal.Interactive`) arrive as
   `POST /fractal/event` with `_fx_path` (the page's location) and
@@ -52,7 +52,7 @@ defmodule Fractal.Router do
 
   require Logger
 
-  alias Fractal.{Guard, HTML, Layout, LiveReload, Page}
+  alias Fractal.{Checkpoint, HTML, Layout, LiveReload, Page}
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
   @static_opts Plug.Static.init(
@@ -296,7 +296,7 @@ defmodule Fractal.Router do
     {flash, conn} = pop_flash(conn)
     assigns = conn |> build_assigns(path_params) |> Map.put(:flash, flash)
 
-    case Guard.run(Page.requires(page), assigns) do
+    case Checkpoint.run(Page.requires(page), assigns) do
       :ok ->
         html = Layout.render(page, assigns)
 
@@ -320,7 +320,7 @@ defmodule Fractal.Router do
     assigns = build_assigns(conn, path_params)
 
     result =
-      case Guard.run(Page.requires(page), assigns) do
+      case Checkpoint.run(Page.requires(page), assigns) do
         :ok -> apply(page, :"handle_#{action}", [assigns])
         {:redirect, _to, _directives} = denied -> denied
       end
@@ -363,7 +363,7 @@ defmodule Fractal.Router do
       |> put_context()
 
     result =
-      case Guard.run(Page.requires(page), assigns) do
+      case Checkpoint.run(Page.requires(page), assigns) do
         :ok -> page.handle_event(event, assigns)
         {:redirect, _to, _directives} = denied -> denied
       end
@@ -470,7 +470,7 @@ defmodule Fractal.Router do
     |> put_context()
   end
 
-  defp put_context(assigns), do: Map.put(assigns, :context, Guard.context(assigns))
+  defp put_context(assigns), do: Map.put(assigns, :context, Checkpoint.context(assigns))
 
   defp render_error(conn, page, exception, stacktrace) do
     details =

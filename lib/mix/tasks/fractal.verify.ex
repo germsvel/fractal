@@ -28,7 +28,7 @@ defmodule Mix.Tasks.Fractal.Verify do
       [
         Fractal.Verify.secret_key(),
         Fractal.Verify.stylesheet(),
-        Fractal.Verify.pending_migrations() | Fractal.Verify.guards()
+        Fractal.Verify.pending_migrations() | Fractal.Verify.checkpoint()
       ] ++ Fractal.Verify.run() ++ Fractal.Verify.run_components()
 
     Enum.each(results, fn

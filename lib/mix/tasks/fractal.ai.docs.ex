@@ -35,14 +35,14 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
   defp print_guard_inventory do
     Mix.shell().info("\n<!-- guard inventory (live — protect pages with require:) -->\n")
 
-    case Fractal.Guard.names() do
+    case Fractal.Checkpoint.names() do
       [] ->
-        Mix.shell().info("No guards defined yet (see Fractal.Guard).")
+        Mix.shell().info("No guards defined yet (see Fractal.Checkpoint).")
 
       names ->
         Enum.each(names, fn name -> Mix.shell().info("- #{inspect(name)}") end)
 
-        Enum.each(Fractal.Guard.expectations(), fn {prefix, guard} ->
+        Enum.each(Fractal.Checkpoint.expectations(), fn {prefix, guard} ->
           Mix.shell().info(
             "- expectation: every page under #{prefix} must declare require: #{inspect(guard)}"
           )

@@ -1,12 +1,12 @@
-defmodule Fractal.GuardTest do
+defmodule Fractal.CheckpointTest do
   use ExUnit.Case, async: true
 
-  alias Fractal.Guard
+  alias Fractal.Checkpoint
 
-  # a fixture guards module — in-memory, so discovery never sees it and
-  # the app's real Fractal.Guards stays the single discovered module
+  # a fixture checkpoint module — in-memory, so discovery never sees it and
+  # the app's real Fractal.Checkpoints stays the single discovered module
   defmodule Fixture do
-    use Fractal.Guard
+    use Fractal.Checkpoint
 
     def context(assigns) do
       %{"role" => assigns.session["role"]}
@@ -42,7 +42,7 @@ defmodule Fractal.GuardTest do
 
   test "context/1 defaults to an empty map and is overridable" do
     defmodule NoContext do
-      use Fractal.Guard
+      use Fractal.Checkpoint
     end
 
     assert NoContext.context(%{session: %{}}) == %{}
@@ -53,7 +53,7 @@ defmodule Fractal.GuardTest do
     error =
       try do
         defmodule BadExpect do
-          use Fractal.Guard
+          use Fractal.Checkpoint
 
           expect("/x", :ghost)
         end
@@ -71,7 +71,7 @@ defmodule Fractal.GuardTest do
     error =
       try do
         defmodule Dup do
-          use Fractal.Guard
+          use Fractal.Checkpoint
 
           guard :twice do
             _ = assigns
@@ -93,21 +93,21 @@ defmodule Fractal.GuardTest do
     assert Exception.message(error) =~ "duplicate guards"
   end
 
-  describe "run/2 (through the app's real Fractal.Guards)" do
+  describe "run/2 (through the app's real Fractal.Checkpoints)" do
     test "no guards required is always :ok" do
-      assert Guard.run([], %{}) == :ok
+      assert Checkpoint.run([], %{}) == :ok
     end
 
     test "passes a signed-in session" do
       assigns = %{session: %{}, context: %{"user_name" => "Ada"}, path: "/admin"}
 
-      assert Guard.run([:signed_in], assigns) == :ok
+      assert Checkpoint.run([:signed_in], assigns) == :ok
     end
 
     test "denies with a redirect and directives, and emits telemetry" do
       :telemetry.attach(
         "guard-denied-test",
-        [:fractal, :guard, :denied],
+        [:fractal, :checkpoint, :denied],
         fn _event, _measure, metadata, pid -> send(pid, {:denied, metadata}) end,
         self()
       )
@@ -116,29 +116,29 @@ defmodule Fractal.GuardTest do
 
       assigns = %{session: %{}, context: %{"user_name" => nil}, path: "/admin"}
 
-      assert {:redirect, "/login", directives} = Guard.run([:signed_in], assigns)
+      assert {:redirect, "/login", directives} = Checkpoint.run([:signed_in], assigns)
       assert directives[:flash] == %{"error" => "Please log in first."}
       assert_received {:denied, %{guard: :signed_in, path: "/admin"}}
     end
 
     test "an undefined guard fails closed" do
       assert_raise FunctionClauseError, fn ->
-        Guard.run([:no_such_guard], %{session: %{}, context: %{}, path: "/"})
+        Checkpoint.run([:no_such_guard], %{session: %{}, context: %{}, path: "/"})
       end
     end
   end
 
-  test "the app's guards module is discovered, once" do
-    assert Guard.module() == Fractal.Guards
-    assert Guard.modules() == [Fractal.Guards]
-    assert :signed_in in Guard.names()
-    assert {"/admin", :signed_in} in Guard.expectations()
+  test "the app's checkpoint module is discovered, once" do
+    assert Checkpoint.module() == Fractal.Checkpoints
+    assert Checkpoint.modules() == [Fractal.Checkpoints]
+    assert :signed_in in Checkpoint.names()
+    assert {"/admin", :signed_in} in Checkpoint.expectations()
   end
 
   test "under?/2 is segment-aware" do
-    assert Guard.under?("/admin", "/admin")
-    assert Guard.under?("/admin/posts", "/admin")
-    refute Guard.under?("/administrator", "/admin")
-    refute Guard.under?("/posts", "/admin")
+    assert Checkpoint.under?("/admin", "/admin")
+    assert Checkpoint.under?("/admin/posts", "/admin")
+    refute Checkpoint.under?("/administrator", "/admin")
+    refute Checkpoint.under?("/posts", "/admin")
   end
 end

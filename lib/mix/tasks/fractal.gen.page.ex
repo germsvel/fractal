@@ -20,7 +20,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
     * `--style` — include a scaffold `style/0` (page-scoped CSS; see
       `guides/assets.md`)
     * `--require` — comma-separated guard names the page requires (see
-      `Fractal.Guard`)
+      `Fractal.Checkpoint`)
 
   After generating, edit `render/1` (and the event handlers) and run
   `mix fractal.verify`.

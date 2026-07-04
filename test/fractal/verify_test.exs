@@ -390,7 +390,7 @@ defmodule Fractal.VerifyTest do
     end
 
     test "guards/0 smoke-runs every guard and the context with empty assigns" do
-      results = Verify.guards()
+      results = Verify.checkpoint()
 
       assert Verify.ok?(results), inspect(Verify.errors(results))
 

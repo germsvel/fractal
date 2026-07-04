@@ -1,10 +1,13 @@
-# Guards and cross-cutting behavior
+# The checkpoint: guards and cross-cutting behavior
 
 Fractal deliberately has **no middleware**. An ordered stack of opaque
 functions is the antithesis of "read one page file, understand the
 route." Cross-cutting behavior follows one rule instead: **declared
 where it applies, defined in one well-known place, guaranteed by
-verify.**
+verify.** That one place is the checkpoint — the module every request
+passes through, where the app establishes who is asking (`context/1`),
+applies named checks (`guard`), and declares which zones require which
+clearances (`expect`).
 
 ## Guards: protecting pages
 
@@ -18,12 +21,12 @@ use Fractal.Page, path: "/admin", title: "Admin", require: :signed_in
 `render/1`, every `handle_*/1`, **and every interactive event** —
 events dispatch to a page, so they cannot bypass its guards.
 
-Guard names are defined in exactly one module,
-`lib/fractal/guards.ex`:
+Guard names are defined in exactly one module — the checkpoint,
+`lib/fractal/checkpoints.ex`:
 
 ```elixir
-defmodule Fractal.Guards do
-  use Fractal.Guard
+defmodule Fractal.Checkpoints do
+  use Fractal.Checkpoint
 
   def context(assigns) do
     %{"user_name" => assigns.session["user_name"]}
@@ -70,7 +73,7 @@ page still shows its own behavior; the guarantee is mechanical.
 Override `context/1` to compute identity-scale data once per request —
 the current user, a locale. It lands under `assigns.context` for every
 page and guard. Because it's namespaced, provenance is self-evident:
-anything on `context.*` came from `lib/fractal/guards.ex`, nowhere
+anything on `context.*` came from `lib/fractal/checkpoints.ex`, nowhere
 else.
 
 Rules: pure derivation from session/params/path (a `Repo.get` for the
@@ -90,7 +93,7 @@ config :fractal, :response_headers, %{"permissions-policy" => "camera=()"}
 ## Observability: telemetry, not middleware
 
 The router emits `[:fractal, :request, :stop]` (duration, method,
-path, status) and `Fractal.Guard` emits `[:fractal, :guard, :denied]`
+path, status) and `Fractal.Checkpoint` emits `[:fractal, :checkpoint, :denied]`
 (guard, path). Attach `:telemetry` handlers in your own application
 code.
 

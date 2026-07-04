@@ -40,14 +40,15 @@ so purely with AI — so this file is the contract for how agents work here.
   `/fractal/components` in dev or the end of `mix fractal.ai.docs` —
   and prefer extending over near-duplicating. Single-page markup stays
   a private function in the page. See `guides/components.md`.
-- **Cross-cutting behavior is guards, not middleware**: pages declare
-  `require: :signed_in` (visible in the page file); guard names are
-  defined once in `lib/fractal/guards.ex` (`guard ... do`), which also
-  derives `assigns.context` (e.g. the current user) and declares
-  coverage contracts (`expect "/admin", :signed_in` — verify fails
-  unguarded matches). Never put auth checks inside `render/1` or
-  handlers, and never ask for a middleware/plug hook — there isn't one.
-  See `guides/guards.md`.
+- **Cross-cutting behavior is the checkpoint, not middleware**: pages
+  declare `require: :signed_in` (visible in the page file); the guard
+  names are defined once in the checkpoint module
+  (`lib/fractal/checkpoints.ex`, `guard ... do`), which also derives
+  `assigns.context` (e.g. the current user) and declares coverage
+  contracts (`expect "/admin", :signed_in` — verify fails unguarded
+  matches). Never put auth checks inside `render/1` or handlers, and
+  never ask for a middleware/plug hook — there isn't one. See
+  `guides/checkpoint.md`.
 - **Tests drive pages through `Fractal.Test`** (`get`, `post`, `put`,
   `patch`, `delete`, `fire_event`, all with a `session:` opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do

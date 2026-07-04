@@ -4,7 +4,7 @@ defmodule Fractal.Pages.Admin do
 
   Demonstrates guards: `require: :signed_in` runs before the render and
   before the refresh event, and the `expect "/admin", :signed_in`
-  declaration in `Fractal.Guards` makes verification fail any future
+  declaration in `Fractal.Checkpoints` makes verification fail any future
   /admin page that forgets it.
   """
 

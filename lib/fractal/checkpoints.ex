@@ -1,14 +1,14 @@
-defmodule Fractal.Guards do
+defmodule Fractal.Checkpoints do
   @moduledoc """
   The app's cross-cutting request behavior: guards, expectations, and
-  context — all in this one file. See `Fractal.Guard` for the model.
+  context — all in this one file. See `Fractal.Checkpoint` for the model.
 
   Pages opt in with `require:`:
 
       use Fractal.Page, path: "/admin", title: "Admin", require: :signed_in
   """
 
-  use Fractal.Guard
+  use Fractal.Checkpoint
 
   # Derivations available to every page and guard as assigns.context.
   # Identity-scale only; must tolerate an empty session.

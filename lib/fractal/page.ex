@@ -37,8 +37,8 @@ defmodule Fractal.Page do
       with `handle_event/2`. See `Fractal.Interactive`.
     * `:require` (optional) — a guard name (or list of them) that must
       pass before this page renders or handles anything, including
-      events. Guards are defined once, in the app's guards module. See
-      `Fractal.Guard`.
+      events. Guards are defined once, in the app's checkpoint module. See
+      `Fractal.Checkpoint`.
 
   ## Styles
 
@@ -136,7 +136,7 @@ defmodule Fractal.Page do
       all string-keyed
     * `:session` — the session, a string-keyed map
     * `:context` — request-scoped derivations (e.g. the current user)
-      from the guards module's `context/1`; empty when none is defined
+      from the checkpoint module's `context/1`; empty when none is defined
     * `:path` — the request path
     * `:conn` — the raw `Plug.Conn` (or `nil` outside a request, e.g.
       during verification — `render/1` must not crash when params and
