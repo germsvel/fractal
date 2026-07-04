@@ -6,14 +6,14 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
+- [ ] Should each page have a verify? function that verifies itself? (thinking
+  of extensions) -- Going with Invariants in /task9.md
 - [ ] Separate framework from sample app
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
 - [ ] Better test helpers
-- [ ] Should each page have a verify? function that verifies itself? (thinking
-  of extensions)
 
 Done
 -----
