@@ -6,6 +6,7 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
+- [ ] Separate framework from sample app
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
 - [ ] Prompting from the page itself? (can we embed)
