@@ -16,8 +16,8 @@ defmodule Fractal.Checkpoints do
     %{"user_name" => assigns.session["user_name"]}
   end
 
-  guard :signed_in do
-    if assigns.context["user_name"] do
+  guard :signed_in, %{context: context} do
+    if context["user_name"] do
       :ok
     else
       {:redirect, "/login", flash: %{"error" => "Please log in first."}}

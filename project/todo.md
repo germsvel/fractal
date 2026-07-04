@@ -13,6 +13,8 @@ Ideas Backlog
   - example: what if people want to pull a known auth package?
 - [ ] Prompting from the page itself? (can we embed)
 - [ ] Push from the server?
+  - [ ] PubSub?
+  - [ ] Build a chat app
 - [ ] Better test helpers
 
 Done

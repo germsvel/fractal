@@ -30,6 +30,21 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
 
     print_component_inventory()
     print_guard_inventory()
+    print_invariant_inventory()
+  end
+
+  defp print_invariant_inventory do
+    Mix.shell().info(
+      "\n<!-- invariant inventory (live — house rules verify enforces on every page) -->\n"
+    )
+
+    case Fractal.Invariant.names() do
+      [] ->
+        Mix.shell().info("No invariants defined yet (see Fractal.Invariant).")
+
+      names ->
+        Enum.each(names, fn name -> Mix.shell().info("- #{name}") end)
+    end
   end
 
   defp print_guard_inventory do

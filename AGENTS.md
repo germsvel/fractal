@@ -53,6 +53,12 @@ so purely with AI — so this file is the contract for how agents work here.
   `patch`, `delete`, `fire_event`, all with a `session:` opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
   not hand-roll persistence.
+- **App-wide rules are invariants**: defined once in
+  `lib/fractal/invariants.ex` (`invariant "...", %{page: page} do`), run
+  by verify against every page. Check the inventory at the end of
+  `mix fractal.ai.docs` before writing a page. A page's own contract is
+  its test file — verify fails any page or component no test references —
+  and pages have no verification API of their own; never add one.
 - `mix fractal.verify` is the feedback loop. A change is not done until
   it passes — it also fails on pending migrations.
 

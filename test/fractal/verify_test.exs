@@ -362,6 +362,73 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: "x"
   end
 
+  defmodule LongTitlePage do
+    use Fractal.Page,
+      path: "/verify-long-title",
+      title: "An exceedingly long and thoroughly search-result-unfriendly page title"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["hi"])
+  end
+
+  defmodule NoH1Page do
+    use Fractal.Page, path: "/verify-no-h1"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:p, [], ["headless"])
+  end
+
+  describe "invariants" do
+    test "the app's discovered pages satisfy the invariants" do
+      results = Verify.run_invariants()
+      assert Verify.ok?(results), inspect(Verify.errors(results))
+    end
+
+    test "a violating page fails with the invariant's message, per invariant" do
+      errors = Verify.errors(Verify.run_invariants([LongTitlePage]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "satisfies invariant 'title fits in a search result'" and
+                 message =~ "keep it under 60"
+             end)
+
+      errors = Verify.errors(Verify.run_invariants([NoH1Page]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "exactly one h1" and message =~ "renders 0 h1"
+             end)
+    end
+
+    test "a page that cannot render fails invariants with a pointer, not a crash" do
+      errors = Verify.errors(Verify.run_invariants([RaisingRender]))
+
+      assert errors != []
+
+      assert Enum.all?(errors, fn {_name, {:error, message}} ->
+               message =~ "does not render"
+             end)
+    end
+
+    test "invariants/0 is ok with the single app module" do
+      assert {"invariants are well-formed", :ok} = Verify.invariants()
+    end
+  end
+
+  describe "test coverage" do
+    test "every discovered page and component is referenced by a test" do
+      results = Verify.test_coverage()
+      assert Verify.ok?(results), inspect(Verify.errors(results))
+    end
+
+    test "a module no test references fails, naming the expected path" do
+      assert [{name, {:error, message}}] = Verify.errors(Verify.test_coverage([GoodPage]))
+
+      assert name =~ "has tests"
+      assert message =~ "no test file references"
+      assert message =~ "test/fractal/pages/good_page_test.exs"
+    end
+  end
+
   describe "guards" do
     test "detects require: of an undefined guard, naming the fix" do
       results = Verify.run([UndefinedGuardPage])

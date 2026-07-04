@@ -28,8 +28,13 @@ defmodule Mix.Tasks.Fractal.Verify do
       [
         Fractal.Verify.secret_key(),
         Fractal.Verify.stylesheet(),
-        Fractal.Verify.pending_migrations() | Fractal.Verify.checkpoint()
-      ] ++ Fractal.Verify.run() ++ Fractal.Verify.run_components()
+        Fractal.Verify.pending_migrations(),
+        Fractal.Verify.invariants() | Fractal.Verify.checkpoint()
+      ] ++
+        Fractal.Verify.run() ++
+        Fractal.Verify.run_components() ++
+        Fractal.Verify.run_invariants() ++
+        Fractal.Verify.test_coverage()
 
     Enum.each(results, fn
       {name, :ok} -> Mix.shell().info("✓ #{name}")

@@ -13,12 +13,11 @@ defmodule Fractal.CheckpointTest do
     end
 
     guard :always_ok do
-      _ = assigns
       :ok
     end
 
-    guard :admins_only do
-      if assigns.context["role"] == "admin" do
+    guard :admins_only, %{context: context} do
+      if context["role"] == "admin" do
         :ok
       else
         {:redirect, "/login", flash: %{"error" => "Admins only."}}
@@ -74,12 +73,10 @@ defmodule Fractal.CheckpointTest do
           use Fractal.Checkpoint
 
           guard :twice do
-            _ = assigns
             :ok
           end
 
           guard :twice do
-            _ = assigns
             :ok
           end
         end

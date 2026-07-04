@@ -32,8 +32,8 @@ defmodule Fractal.Checkpoints do
     %{"user_name" => assigns.session["user_name"]}
   end
 
-  guard :signed_in do
-    if assigns.context["user_name"],
+  guard :signed_in, %{context: context} do
+    if context["user_name"],
       do: :ok,
       else: {:redirect, "/login", flash: %{"error" => "Please log in first."}}
   end
@@ -44,9 +44,12 @@ end
 
 The rules:
 
-- A guard's block receives `assigns` (params, session, path, context)
-  and returns `:ok` or `{:redirect, to[, directives]}` — the same
-  vocabulary as page handlers, session/flash directives included.
+- A guard receives the assigns (params, session, path, context) as an
+  explicit pattern-matched argument — `guard :name, %{context: context} do`,
+  the same shape as ExUnit's `test "name", %{conn: conn}`; omit the
+  pattern when unneeded. It returns `:ok` or
+  `{:redirect, to[, directives]}` — the same vocabulary as page
+  handlers, session/flash directives included.
 - Guards **cannot mutate assigns** — they allow or redirect, nothing
   else. Derivation belongs to `context/1`.
 - Guards may query the database (unlike components).

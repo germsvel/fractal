@@ -31,9 +31,13 @@ defmodule Fractal.Verify do
       references (the framework owns the client — vendor files into
       `assets/static/`)
 
-  `pending_migrations/0` and `secret_key/0` additionally check the
-  database is migrated and the session secret is configured;
-  `mix fractal.verify` runs them alongside these checks.
+  `mix fractal.verify` composes these with the other layers of the
+  contract: `pending_migrations/0` and `secret_key/0` (environment),
+  `run_components/1` (components), `run_invariants/1` (the app's own
+  invariants from `Fractal.Invariant`, run against every page), and
+  `test_coverage/1` (every page and component must be referenced by a
+  test file — the test file is the per-page behavioral contract, and
+  its existence is enforced, not hoped for).
   """
 
   alias Fractal.{HTML, Page, Router}
@@ -56,6 +60,73 @@ defmodule Fractal.Verify do
         {"#{inspect(component)} declares valid styles", validate_style(component)},
         {"#{inspect(component)} renders its example", validate_component_render(component)}
       ]
+    end)
+  end
+
+  @doc """
+  Runs the app's invariants (see `Fractal.Invariant`) against `pages`
+  (defaults to the discovered ones).
+
+  Each invariant runs per page with `%{page: page, rendered: html}`;
+  a crashing invariant is a failing one. Pages that don't render get a
+  failing result pointing at their render check.
+  """
+  @spec run_invariants([module()]) :: [result()]
+  def run_invariants(pages \\ Router.pages()) do
+    case Fractal.Invariant.names() do
+      [] -> []
+      names -> Enum.flat_map(pages, &invariant_checks(&1, names))
+    end
+  end
+
+  @doc """
+  Checks that at most one invariants module exists.
+  """
+  @spec invariants() :: result()
+  def invariants do
+    name = "invariants are well-formed"
+
+    case Fractal.Invariant.modules() do
+      many when length(many) > 1 ->
+        {name,
+         {:error,
+          "found #{length(many)} invariants modules (#{Enum.map_join(many, ", ", &inspect/1)}) — " <>
+            "the app's invariants live in exactly one"}}
+
+      _zero_or_one ->
+        {name, :ok}
+    end
+  end
+
+  @doc """
+  Checks that every page and component is referenced by a test file.
+
+  The test file is the per-page behavioral contract; this converts
+  "forgot to write tests entirely" from silent to loud. It cannot judge
+  test quality — that isn't its job.
+  """
+  @spec test_coverage([module()]) :: [result()]
+  def test_coverage(modules \\ Router.pages() ++ Fractal.Component.all()) do
+    blob =
+      "test/**/*_test.exs"
+      |> Path.wildcard()
+      |> Enum.map_join("\n", &File.read!/1)
+
+    Enum.map(modules, fn module ->
+      name = "#{inspect(module)} has tests"
+
+      if String.contains?(blob, inspect(module)) do
+        {name, :ok}
+      else
+        kind = if Fractal.Component.component?(module), do: "components", else: "pages"
+        file_base = module |> Module.split() |> List.last() |> Macro.underscore()
+
+        {name,
+         {:error,
+          "no test file references #{inspect(module)} — add " <>
+            "test/fractal/#{kind}/#{file_base}_test.exs (the generators scaffold these; " <>
+            "see the testing conventions in the guides)"}}
+      end
     end)
   end
 
@@ -318,6 +389,64 @@ defmodule Fractal.Verify do
       ]
   end
 
+  defp invariant_checks(page, names) do
+    case smoke_render(page) do
+      {:ok, rendered} ->
+        context = %{page: page, rendered: rendered}
+
+        for name <- names do
+          {"#{inspect(page)} satisfies invariant '#{name}'", run_invariant(name, context)}
+        end
+
+      :error ->
+        for name <- names do
+          {"#{inspect(page)} satisfies invariant '#{name}'",
+           {:error, "the page does not render (fix its render check first)"}}
+        end
+    end
+  end
+
+  defp run_invariant(name, context) do
+    case Fractal.Invariant.run(name, context) do
+      :ok ->
+        :ok
+
+      {:error, message} when is_binary(message) ->
+        {:error, message}
+
+      other ->
+        {:error, "invariants must return :ok or {:error, message}, got: #{inspect(other)}"}
+    end
+  rescue
+    exception -> {:error, "the invariant raised: #{Exception.message(exception)}"}
+  end
+
+  defp smoke_render(page) do
+    case page.render(smoke_assigns(page)) do
+      %HTML.Safe{} = safe ->
+        {:ok, HTML.safe_to_string(safe)}
+
+      content when is_binary(content) or is_list(content) ->
+        {:ok, content |> HTML.to_safe() |> HTML.safe_to_string()}
+
+      _other ->
+        :error
+    end
+  rescue
+    _exception -> :error
+  end
+
+  defp smoke_assigns(page) do
+    %{
+      conn: nil,
+      params: %{},
+      session: %{},
+      context: %{},
+      flash: %{},
+      path: safe_route(page, & &1.path()) || "/"
+    }
+  end
+
   # expectations turn "every /admin page must be guarded" into a
   # verification contract instead of hidden runtime behavior
   defp check_expectations(pages) do
@@ -431,16 +560,7 @@ defmodule Fractal.Verify do
   defp method_name(action), do: action |> to_string() |> String.upcase()
 
   defp validate_render(page) do
-    assigns = %{
-      conn: nil,
-      params: %{},
-      session: %{},
-      context: %{},
-      flash: %{},
-      path: safe_route(page, & &1.path()) || "/"
-    }
-
-    case page.render(assigns) do
+    case page.render(smoke_assigns(page)) do
       %HTML.Safe{} = safe ->
         scan_html(HTML.safe_to_string(safe))
 

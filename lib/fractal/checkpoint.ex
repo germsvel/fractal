@@ -20,8 +20,8 @@ defmodule Fractal.Checkpoint do
           %{"user_name" => assigns.session["user_name"]}
         end
 
-        guard :signed_in do
-          if assigns.context["user_name"],
+        guard :signed_in, %{context: context} do
+          if context["user_name"],
             do: :ok,
             else: {:redirect, "/login", flash: %{"error" => "Please log in first."}}
         end
@@ -31,8 +31,9 @@ defmodule Fractal.Checkpoint do
 
   ## Guards
 
-  `guard name do ... end` defines a named check. The block receives
-  `assigns` (params, session, path, context — same shape pages see) and
+  `guard name, pattern do ... end` defines a named check. The assigns
+  (params, session, path, context — same shape pages see) arrive as an
+  explicit pattern-matched argument, ExUnit-style; the block
   must return `:ok` or `{:redirect, to}` / `{:redirect, to, directives}`
   — the same vocabulary as page handlers. Guards cannot mutate assigns:
   they allow or redirect, nothing else. Unlike components, guards may
@@ -72,7 +73,7 @@ defmodule Fractal.Checkpoint do
 
       @behaviour Fractal.Checkpoint
 
-      import Fractal.Checkpoint, only: [guard: 2, expect: 2]
+      import Fractal.Checkpoint, only: [guard: 2, guard: 3, expect: 2]
 
       Module.register_attribute(__MODULE__, :fractal_guard_names, accumulate: true)
       Module.register_attribute(__MODULE__, :fractal_expectations, accumulate: true)
@@ -85,17 +86,29 @@ defmodule Fractal.Checkpoint do
   end
 
   @doc """
-  Defines a named guard. The block receives `assigns` and returns `:ok`
-  or `{:redirect, to[, directives]}`.
+  Defines a named guard. The assigns arrive as an explicit,
+  pattern-matched argument (ExUnit-style — no magic variables); the
+  block returns `:ok` or `{:redirect, to[, directives]}`.
+
+      guard :signed_in, %{context: context} do
+        if context["user_name"], do: :ok, else: {:redirect, "/login"}
+      end
+
+  Omit the pattern when the guard needs no assigns.
   """
   defmacro guard(name, do: block) when is_atom(name) do
     quote do
       @fractal_guard_names unquote(name)
 
-      def check(unquote(name), var!(assigns)) do
-        _ = var!(assigns)
-        unquote(block)
-      end
+      def check(unquote(name), _guard_assigns), do: unquote(block)
+    end
+  end
+
+  defmacro guard(name, pattern, do: block) when is_atom(name) do
+    quote do
+      @fractal_guard_names unquote(name)
+
+      def check(unquote(name), unquote(pattern) = _guard_assigns), do: unquote(block)
     end
   end
 

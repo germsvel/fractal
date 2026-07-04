@@ -22,6 +22,9 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     assert output =~ "guard inventory"
     assert output =~ ":signed_in"
     assert output =~ "every page under /admin must declare require: :signed_in"
+    assert output =~ "invariant inventory"
+    assert output =~ "- title fits in a search result"
+    assert output =~ "- every page renders exactly one h1"
   end
 
   @tag :tmp_dir
