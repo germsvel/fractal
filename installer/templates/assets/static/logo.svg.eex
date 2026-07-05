@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Fractal logo">
+  <polygon points="50,8 92,86 8,86" fill="none" stroke="#7cc4ff" stroke-width="4"/>
+  <polygon points="29,47 71,47 50,86" fill="#7cc4ff" opacity="0.35"/>
+  <polygon points="50,8 71,47 29,47" fill="#7cc4ff"/>
+</svg>

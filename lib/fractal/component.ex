@@ -7,7 +7,7 @@ defmodule Fractal.Component do
   one module (the page pattern at smaller scale): a pure render
   function, an optional scoped style, and a required example.
 
-      defmodule Fractal.Components.Card do
+      defmodule MyApp.Components.Card do
         @moduledoc "A surface for grouping related content."
 
         use Fractal.Component
@@ -36,7 +36,7 @@ defmodule Fractal.Component do
   Pages render components with `component/2` (imported by
   `use Fractal.Page`):
 
-      component(Fractal.Components.Card, title: "Stats", body: chart)
+      component(MyApp.Components.Card, title: "Stats", body: chart)
 
   ## The rules
 

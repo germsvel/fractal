@@ -1,7 +1,5 @@
 import Config
 
-config :fractal, ecto_repos: [Fractal.Repo]
-
 # Extra response headers, merged over Fractal's secure defaults
 # (x-content-type-options, x-frame-options, referrer-policy):
 #

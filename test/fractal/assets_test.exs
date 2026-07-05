@@ -42,17 +42,17 @@ defmodule Fractal.AssetsTest do
     test "includes every page's style/0, scoped by page slug" do
       {_hash, css} = Assets.css_bundle()
 
-      assert css =~ ~s([data-page="home"] {)
-      assert css =~ ".logo { width: 3.5rem;"
+      assert css =~ ~s([data-page="static-page"] {)
+      assert css =~ "letter-spacing: 0.02em;"
     end
 
     test "includes every component's style/0, scoped, before page styles" do
       {_hash, css} = Assets.css_bundle()
 
-      assert css =~ ~s([data-component="empty-state"] {)
+      assert css =~ ~s([data-component="note"] {)
 
-      {component_index, _} = :binary.match(css, ~s([data-component="empty-state"]))
-      {page_index, _} = :binary.match(css, ~s([data-page="home"]))
+      {component_index, _} = :binary.match(css, ~s([data-component="note"]))
+      {page_index, _} = :binary.match(css, ~s([data-page="static-page"]))
       assert component_index < page_index
     end
 

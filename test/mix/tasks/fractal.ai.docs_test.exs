@@ -12,16 +12,19 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     Mix.Tasks.Fractal.Ai.Docs.run([])
 
     output = flush_output()
-    assert output =~ "guides/building_pages.md"
+    assert output =~ "guide: building_pages.md"
     assert output =~ "# Building pages"
-    assert output =~ "guides/verification.md"
+    assert output =~ "guide: verification.md"
     assert output =~ "# Verification"
     assert output =~ "component inventory"
-    assert output =~ "Fractal.Components.EmptyState"
+    assert output =~ "Fractal.Fixtures.Note"
     assert output =~ "example assigns:"
     assert output =~ "guard inventory"
-    assert output =~ ":signed_in"
-    assert output =~ "every page under /admin must declare require: :signed_in"
+    assert output =~ ":fixture_signed_in"
+
+    assert output =~
+             "every page under /fixtures/admin must declare require: :fixture_signed_in"
+
     assert output =~ "invariant inventory"
     assert output =~ "- title fits in a search result"
     assert output =~ "- meta description fits a search snippet"
@@ -29,11 +32,10 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
   end
 
   @tag :tmp_dir
-  test "fails helpfully when run outside the project root", %{tmp_dir: tmp_dir} do
+  test "works from any directory — guides ship in the package", %{tmp_dir: tmp_dir} do
     File.cd!(tmp_dir, fn ->
-      assert_raise Mix.Error, ~r/no guides found/, fn ->
-        Mix.Tasks.Fractal.Ai.Docs.run([])
-      end
+      Mix.Tasks.Fractal.Ai.Docs.run([])
+      assert flush_output() =~ "guide: building_pages.md"
     end)
   end
 

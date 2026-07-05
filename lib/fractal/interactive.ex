@@ -9,7 +9,7 @@ defmodule Fractal.Interactive do
   into the target element. Request in, HTML out — the same mental model
   as the rest of the framework.
 
-      defmodule Fractal.Pages.Counter do
+      defmodule MyApp.Pages.Counter do
         use Fractal.Page, path: "/counter", title: "Counter", events: ["increment"]
 
         @impl Fractal.Page

@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Fractal.Gen.Component do
   or extending an existing component over creating a near-duplicate.
 
   Components are render-only (no routes, events, sessions, or queries);
-  see `Fractal.Component` and `guides/components.md`.
+  see `Fractal.Component` and the components guide in `mix fractal.ai.docs`.
   """
 
   use Mix.Task

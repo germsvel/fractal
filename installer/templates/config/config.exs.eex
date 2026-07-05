@@ -1,0 +1,9 @@
+import Config
+
+config :<%= @app %>, ecto_repos: [<%= @mod %>.Repo]
+
+# Extra response headers, merged over Fractal's secure defaults:
+#
+#     config :fractal, :response_headers, %{"permissions-policy" => "camera=()"}
+
+import_config "#{config_env()}.exs"

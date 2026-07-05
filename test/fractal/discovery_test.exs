@@ -45,11 +45,12 @@ defmodule Fractal.DiscoveryTest do
   end
 
   test "host_repo/0 reads the host's ecto_repos" do
-    assert Discovery.host_repo() == Fractal.Repo
-
-    # a repo-less host has no repo
-    Application.put_env(:fractal, :otp_app, :no_such_app)
+    # the framework itself is repo-less
     assert Discovery.host_repo() == nil
+
+    Application.put_env(:fractal, :ecto_repos, [Fractal.Fixtures.Repo])
+    on_exit(fn -> Application.delete_env(:fractal, :ecto_repos) end)
+    assert Discovery.host_repo() == Fractal.Fixtures.Repo
   end
 
   test "modules/0 scans the host app's beams" do

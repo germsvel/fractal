@@ -4,7 +4,16 @@ defmodule Mix.Tasks.Fractal.Gen.ResourceTest do
   setup do
     original_shell = Mix.shell()
     Mix.shell(Mix.Shell.Process)
-    on_exit(fn -> Mix.shell(original_shell) end)
+
+    # the framework root has no repo; the generator derives names from the
+    # host's :ecto_repos, so give it one for the duration of the test
+    Application.put_env(:fractal, :ecto_repos, [Fractal.Repo])
+
+    on_exit(fn ->
+      Mix.shell(original_shell)
+      Application.delete_env(:fractal, :ecto_repos)
+    end)
+
     :ok
   end
 

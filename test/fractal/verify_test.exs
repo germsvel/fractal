@@ -1,8 +1,7 @@
 defmodule Fractal.VerifyTest do
-  # DataCase: discovered pages include database-backed ones, which render
-  # real queries during verification. Not async: the secret_key test
-  # briefly mutates global config.
-  use Fractal.DataCase
+  # not async: the secret_key test briefly mutates global config, and the
+  # tmp_dir tests change the working directory
+  use ExUnit.Case
 
   alias Fractal.Verify
 
@@ -248,7 +247,7 @@ defmodule Fractal.VerifyTest do
            end)
   end
 
-  test "pending_migrations/0 passes on a migrated database" do
+  test "pending_migrations/0 passes on a repo-less app — nothing to migrate" do
     assert {"migrations are up", :ok} = Verify.pending_migrations()
   end
 
@@ -315,7 +314,7 @@ defmodule Fractal.VerifyTest do
   describe "run_components/1" do
     test "a well-formed component passes" do
       assert Verify.ok?(Verify.run_components([GoodComponent]))
-      assert Verify.ok?(Verify.run_components([Fractal.Components.EmptyState]))
+      assert Verify.ok?(Verify.run_components([Fractal.Fixtures.Note]))
     end
 
     test "detects examples that fail to render" do
@@ -343,9 +342,17 @@ defmodule Fractal.VerifyTest do
     end
   end
 
-  test "unused_components/0 only reports components no page renders" do
-    # EmptyState is rendered by the post show/edit pages
-    refute inspect(Fractal.Components.EmptyState) in Verify.unused_components()
+  @tag :tmp_dir
+  test "unused_components/0 only reports components no page renders", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      File.mkdir_p!("lib/fractal/pages")
+
+      # no page source renders Note
+      assert inspect(Fractal.Fixtures.Note) in Verify.unused_components()
+
+      File.write!("lib/fractal/pages/home.ex", ~s{component(Note, title: "t", body: "b")})
+      refute inspect(Fractal.Fixtures.Note) in Verify.unused_components()
+    end)
   end
 
   defmodule UndefinedGuardPage do
@@ -356,7 +363,7 @@ defmodule Fractal.VerifyTest do
   end
 
   defmodule UnguardedAdminPage do
-    use Fractal.Page, path: "/admin/verify-sneaky"
+    use Fractal.Page, path: "/fixtures/admin/verify-sneaky"
 
     @impl Fractal.Page
     def render(_assigns), do: "x"
@@ -591,12 +598,12 @@ defmodule Fractal.VerifyTest do
       assert Enum.any?(errors, fn {name, {:error, message}} ->
                name == "guard expectations are honored" and
                  message =~ "UnguardedAdminPage" and
-                 message =~ "require: :signed_in"
+                 message =~ "require: :fixture_signed_in"
              end)
     end
 
-    test "the guarded admin page honors the expectation" do
-      results = Verify.run([Fractal.Pages.Admin])
+    test "the guarded fixture page honors the expectation" do
+      results = Verify.run([Fractal.Fixtures.GuardedPage])
       assert Verify.ok?(results), inspect(Verify.errors(results))
     end
 
@@ -606,7 +613,7 @@ defmodule Fractal.VerifyTest do
       assert Verify.ok?(results), inspect(Verify.errors(results))
 
       assert Enum.any?(results, fn {name, _} ->
-               name =~ "guard :signed_in tolerates an empty session"
+               name =~ "guard :fixture_signed_in tolerates an empty session"
              end)
 
       assert Enum.any?(results, fn {name, _} ->
@@ -615,8 +622,9 @@ defmodule Fractal.VerifyTest do
     end
 
     test "unused_guards/0 only reports guards nothing uses" do
-      # :signed_in is required by the admin page and expected under /admin
-      refute :signed_in in Verify.unused_guards()
+      # :fixture_signed_in is required by the guarded fixture page and
+      # expected under /fixtures/admin
+      refute :fixture_signed_in in Verify.unused_guards()
     end
   end
 
@@ -716,9 +724,17 @@ defmodule Fractal.VerifyTest do
     assert {"app stylesheet is well-formed", :ok} = Verify.stylesheet()
   end
 
-  test "orphaned_assets/0 only reports unreferenced files" do
-    # logo.svg is referenced by the home page
-    refute "logo.svg" in Verify.orphaned_assets()
+  @tag :tmp_dir
+  test "orphaned_assets/0 only reports unreferenced files", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      File.mkdir_p!("assets/static")
+      File.mkdir_p!("lib/fractal/pages")
+      File.write!("assets/static/used.svg", "<svg></svg>")
+      File.write!("assets/static/orphan.svg", "<svg></svg>")
+      File.write!("lib/fractal/pages/home.ex", ~s{asset_path("used.svg")})
+
+      assert Verify.orphaned_assets() == ["orphan.svg"]
+    end)
   end
 
   test "detects a hand-rolled <form> without a CSRF token" do
@@ -731,7 +747,7 @@ defmodule Fractal.VerifyTest do
            end)
 
     # forms built with Fractal.Form pass
-    assert Verify.ok?(Verify.run([Fractal.Pages.Login]))
+    assert Verify.ok?(Verify.run([Fractal.Fixtures.FormPage]))
   end
 
   test "detects a render that raises" do

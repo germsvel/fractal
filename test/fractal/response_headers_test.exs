@@ -5,7 +5,7 @@ defmodule Fractal.ResponseHeadersTest do
   import Fractal.Test, only: [get: 1]
 
   test "every response carries the secure defaults" do
-    conn = get("/")
+    conn = get("/fixtures")
 
     assert Plug.Conn.get_resp_header(conn, "x-content-type-options") == ["nosniff"]
     assert Plug.Conn.get_resp_header(conn, "x-frame-options") == ["SAMEORIGIN"]
@@ -28,7 +28,7 @@ defmodule Fractal.ResponseHeadersTest do
 
     on_exit(fn -> Application.delete_env(:fractal, :response_headers) end)
 
-    conn = get("/")
+    conn = get("/fixtures")
 
     assert Plug.Conn.get_resp_header(conn, "permissions-policy") == ["camera=()"]
     assert Plug.Conn.get_resp_header(conn, "x-frame-options") == ["DENY"]
@@ -44,9 +44,11 @@ defmodule Fractal.ResponseHeadersTest do
 
     on_exit(fn -> :telemetry.detach("request-stop-test") end)
 
-    get("/")
+    get("/fixtures")
 
-    assert_received {:stop, %{duration: duration}, %{method: "GET", path: "/", status: 200}}
+    assert_received {:stop, %{duration: duration},
+                     %{method: "GET", path: "/fixtures", status: 200}}
+
     assert is_integer(duration)
   end
 end

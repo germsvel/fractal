@@ -4,7 +4,7 @@ defmodule Fractal.DocumentTest do
   alias Fractal.{Document, HTML}
 
   # the app's Layout is a single-instance module (like the checkpoint),
-  # so document tests observe it through this repo's Fractal.Layouts
+  # so document tests observe it through the discovered fixture layout
   @site Fractal.Layout.site()
 
   test "shell/3 wraps content in a full document with an escaped, composed title" do
@@ -78,7 +78,7 @@ defmodule Fractal.DocumentTest do
       params: %{},
       context: %{},
       path: "/",
-      session: %{"user_name" => "Ada"}
+      session: %{"fixture_user" => "Ada"}
     }
 
     html = Document.shell("t", "b", assigns: signed_in)
@@ -86,7 +86,6 @@ defmodule Fractal.DocumentTest do
     assert html =~ ~s(<div data-layout style="display: contents">)
     assert html =~ ~s(class="session-bar")
     assert html =~ "Ada"
-    assert html =~ ~s(action="/logout")
 
     # chrome returning nil renders nothing
     refute Document.shell("t", "b") =~ "data-layout"

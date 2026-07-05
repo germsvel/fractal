@@ -1,0 +1,24 @@
+defmodule <%= @mod %>.Components.EmptyStateTest do
+  use ExUnit.Case, async: true
+
+  import Fractal.Component, only: [component: 2]
+
+  alias <%= @mod %>.Components.EmptyState
+  alias Fractal.HTML
+
+  test "passes Fractal's component verification checks" do
+    results = Fractal.Verify.run_components([EmptyState])
+    assert Fractal.Verify.ok?(results), inspect(Fractal.Verify.errors(results))
+  end
+
+  test "renders the title and the way back" do
+    html =
+      EmptyState
+      |> component(title: "Nothing found", back_href: "/", back_label: "Back home")
+      |> HTML.safe_to_string()
+
+    assert html =~ ~s(data-component="empty-state")
+    assert html =~ "Nothing found"
+    assert html =~ ~s(<a href="/">Back home</a>)
+  end
+end

@@ -11,11 +11,11 @@ defmodule Fractal.ServerTest do
     :ok
   end
 
-  test "serves the home page over real HTTP" do
+  test "serves a page over real HTTP" do
     assert {:ok, {{_http, 200, _reason}, _headers, body}} =
-             :httpc.request(:get, {~c"http://127.0.0.1:#{@port}/", []}, [], [])
+             :httpc.request(:get, {~c"http://127.0.0.1:#{@port}/fixtures", []}, [], [])
 
-    assert to_string(body) =~ "Fractal"
+    assert to_string(body) =~ "Fixtures"
   end
 
   test "serves 404s for unknown paths over real HTTP" do

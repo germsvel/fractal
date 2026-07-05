@@ -1,0 +1,29 @@
+defmodule <%= @mod %>.InvariantsTest do
+  use ExUnit.Case, async: true
+
+  alias Fractal.Invariant
+
+  # in-memory page (not discovered), just to exercise the rule's failure side
+  defmodule LongTitlePage do
+    use Fractal.Page,
+      path: "/invariant-test-long-title",
+      title: "An exceedingly long and thoroughly search-result-unfriendly title"
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  test "is the app's single discovered invariants module" do
+    assert Invariant.module() == <%= @mod %>.Invariants
+    assert "title fits in a search result" in Invariant.names()
+  end
+
+  test "the title rule passes short titles and fails long ones" do
+    assert Invariant.run("title fits in a search result", %{page: <%= @mod %>.Pages.Home}) == :ok
+
+    assert {:error, message} =
+             Invariant.run("title fits in a search result", %{page: LongTitlePage})
+
+    assert message =~ "keep it under 60"
+  end
+end

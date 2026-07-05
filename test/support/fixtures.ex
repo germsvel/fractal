@@ -17,6 +17,13 @@ defmodule Fractal.Fixtures do
         tag(:p, [], ["The framework's own test pages."])
       ])
     end
+
+    @impl Fractal.Page
+    def style do
+      """
+      h1 { letter-spacing: 0.02em; }
+      """
+    end
   end
 
   defmodule ShowPage do
@@ -163,6 +170,135 @@ defmodule Fractal.Fixtures do
         tag(:p, [], ["pong ", count]),
         trigger("Ping", "ping", target: "#ping-region", values: %{n: count})
       ])
+    end
+  end
+
+  defmodule GuardedPage do
+    @moduledoc false
+    use Fractal.Page,
+      path: "/fixtures/admin",
+      title: "Fixture admin",
+      require: :fixture_signed_in
+
+    @impl Fractal.Page
+    def render(assigns) do
+      tag(:section, [], [
+        tag(:h1, [], ["Fixture admin"]),
+        tag(:p, [], ["Hello, ", assigns.context["fixture_user"] || "stranger"])
+      ])
+    end
+  end
+
+  defmodule Checkpoint do
+    @moduledoc false
+    use Fractal.Checkpoint
+
+    def context(assigns) do
+      %{"fixture_user" => assigns.session["fixture_user"]}
+    end
+
+    guard :fixture_signed_in, %{context: context} do
+      if context["fixture_user"] do
+        :ok
+      else
+        {:redirect, "/fixtures", flash: %{"error" => "Fixtures say: log in first."}}
+      end
+    end
+
+    expect("/fixtures/admin", :fixture_signed_in)
+  end
+
+  defmodule Invariants do
+    @moduledoc false
+    use Fractal.Invariant
+
+    invariant "title fits in a search result", %{page: page} do
+      length = page.title() |> String.length()
+
+      if length <= 60 do
+        :ok
+      else
+        {:error, "title is #{length} chars — keep it under 60"}
+      end
+    end
+
+    invariant "meta description fits a search snippet", %{meta: meta} do
+      case meta[:description] do
+        nil ->
+          :ok
+
+        description ->
+          length = String.length(description)
+
+          if length <= 160 do
+            :ok
+          else
+            {:error, "meta description is #{length} chars — keep it under 160"}
+          end
+      end
+    end
+
+    invariant "every page renders exactly one h1", %{rendered: rendered} do
+      case rendered |> String.split("<h1") |> length() |> Kernel.-(1) do
+        1 -> :ok
+        count -> {:error, "renders #{count} h1 elements — pages need exactly one"}
+      end
+    end
+  end
+
+  defmodule Layout do
+    @moduledoc false
+    use Fractal.Layout
+
+    def site do
+      %{
+        name: "Fixture Site",
+        lang: "en",
+        favicon: asset_path("logo.svg"),
+        theme_color: "#0b1021",
+        description: "Fixture pages for framework tests."
+      }
+    end
+
+    def chrome(assigns) do
+      case assigns.session["fixture_user"] do
+        name when is_binary(name) and name != "" ->
+          tag(:div, [class: "session-bar"], ["Signed in as ", tag(:strong, [], [name])])
+
+        _signed_out ->
+          nil
+      end
+    end
+
+    def style do
+      """
+      .session-bar { display: flex; justify-content: flex-end; }
+      """
+    end
+  end
+
+  defmodule Note do
+    @moduledoc false
+    use Fractal.Component
+
+    @impl Fractal.Component
+    def render(assigns) do
+      tag(:aside, [class: "note"], [
+        tag(:strong, [], [assigns.title]),
+        tag(:p, [], [assigns.body])
+      ])
+    end
+
+    @impl Fractal.Component
+    def style do
+      """
+      .note { border-left: 3px solid var(--accent, #888); padding-left: 1rem; }
+      """
+    end
+
+    @impl Fractal.Component
+    def example do
+      %{title: "Heads up", body: "Fixtures are the framework's own test pages."}
     end
   end
 end

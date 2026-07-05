@@ -1,0 +1,50 @@
+# <%= @mod %>
+
+A [Fractal](https://github.com/germsvel/fractal) application — an
+AI-first web framework for Elixir. This app is a prompt-ready workspace:
+the fundamental pattern is asking your AI agent to build it, and letting
+`mix fractal.verify` prove the result correct.
+
+## First run
+
+```sh
+mix deps.get        # if you haven't already
+mix ecto.setup      # create the database
+mix fractal.server  # http://localhost:4000, live reload on
+mix fractal.verify  # the feedback loop — green from birth
+```
+
+## Quickstart: prompt, don't tutorial
+
+Open your AI agent in this directory (it will find `AGENTS.md`) and ask:
+
+- *Create a Fractal page at `/pricing` that lists three plans.*
+- *Generate a `Post` resource with a title and a body, and list the
+  latest posts on the home page.*
+- *Add a nav bar with links to every page.* (The agent will create the
+  app's layout module.)
+- *Make the counter page count by tens.* (Then: *delete the counter
+  page* — it's a demo.)
+- *Add login with a session, and protect `/admin` behind it.*
+
+After each change the agent runs `mix fractal.verify` — pages render,
+routes are unique, styles are scoped, forms carry CSRF tokens, every
+page has tests, and the app's invariants hold. If it's green, it works.
+
+## Where things live
+
+| Path | What |
+| --- | --- |
+| `lib/<%= @app %>/pages/` | One file per page — route, render, handlers together |
+| `lib/<%= @app %>/components/` | Shared render-only UI components |
+| `lib/<%= @app %>/checkpoints.ex` | Guards, expectations, and request context |
+| `lib/<%= @app %>/invariants.ex` | House rules verify enforces on every page |
+| `assets/app.css` | Design tokens and app-wide styles |
+| `assets/static/` | Static files, referenced via `asset_path/1` |
+| `test/<%= @app %>/` | The behavioral contract — verify fails untested pages |
+
+## Docs
+
+`mix fractal.ai.docs` prints the framework guides plus this app's live
+inventories (components, guards, invariants). That's the same document
+your agent reads before writing code.

@@ -155,7 +155,7 @@ defmodule Fractal.Verify do
             {node, acc}
           end
 
-        # alias Fractal.Pages.{Post, Posts}
+        # alias MyApp.Pages.{Post, Posts}
         {{:., _, [{:__aliases__, _, base}, :{}]}, _meta, tails} = node, acc ->
           expanded =
             for {:__aliases__, _, tail} <- tails,
@@ -610,7 +610,7 @@ defmodule Fractal.Verify do
       Fractal.Checkpoint.module() == nil ->
         {:error,
          "requires guards #{inspect(requires)} but no checkpoint module exists — " <>
-           "create lib/fractal/checkpoints.ex with `use Fractal.Checkpoint`"}
+           "create lib/my_app/checkpoints.ex with `use Fractal.Checkpoint`"}
 
       true ->
         case Enum.reject(requires, &(&1 in Fractal.Checkpoint.names())) do

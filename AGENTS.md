@@ -1,124 +1,91 @@
-# Fractal
+# Fractal — contributor contract
 
-An AI-first web framework written in Elixir. Humans build it, but they do
-so purely with AI — so this file is the contract for how agents work here.
+This repo is the Fractal framework itself, built purely with AI — so this
+file is the contract for agents working **on** the framework. Agents
+working **in** a Fractal app get their own `AGENTS.md` from
+`mix fractal.new` (template: `installer/templates/AGENTS.md.eex`).
 
-## Orientation
+## Repository layout
 
-- A **page** is one module in `lib/fractal/pages/` using `Fractal.Page`.
-  Routes are auto-discovered; there is no router file to edit. Dynamic
-  segments (`/posts/:id`) bind `params["id"]`. (Paths and namespaces
-  derive from the host app — in this repo the host is `fractal` itself;
-  in a consuming app they'd be `lib/blog/pages/`, `Blog.Pages.*`.)
-- **The framework owns the document, the app's layout contributes
-  app-wide data and chrome, the page contributes content.** The layout
-  module (`lib/fractal/layouts.ex`, `use Fractal.Layout`) supplies
-  `site/0` (name, lang, favicon, theme color) and `chrome/1` (nav /
-  session bar above `<main>`) — data and safe HTML in, framework
-  renders. Per-page head data (description, og tags, canonical) is the
-  page's `meta/1` callback — data only; descriptions must fit a search
-  snippet. Never ask for an app-owned root template or `<head>` markup;
-  there isn't one. See `guides/layout.md`.
-- A page that renders a form also **handles the submission in the same
-  file**: `use Fractal.Page, path: "/posts/new", post: "/posts"` plus
-  `handle_post/1` — likewise `put:`/`handle_put/1` (updates; matches
-  PUT and PATCH) and `delete:`/`handle_delete/1` (destroys) on the edit
-  page. Keep it that way — do not add controllers.
-- HTML is built with `Fractal.HTML.tag/3` — escaped by default, `raw/1`
-  is the only escape hatch. Forms use `Fractal.Form`.
-- **Interactivity needs no JavaScript**: declare `events:` on the page,
-  wire elements with `trigger/3` or `fx/2`, handle them in
-  `handle_event/2` returning `{:fragment, ...}`. State travels with the
-  event (`values:`) or lives in the database — the server is stateless.
-  See `guides/interactivity.md`. Never write `<script>` tags.
-- **Sessions are encrypted cookies**: read `assigns.session`
-  (string-keyed, like params); write via result directives —
-  `{:redirect, to, session: %{...}}`, `clear_session: true`,
-  `flash: %{"info" => "..."}` — never by touching a conn. Identity-scale
-  data only. See `guides/sessions.md`.
-- **CSRF is automatic and invisible**: `Fractal.Form` and the fx runtime
-  attach tokens; the router rejects requests without them. Never
-  hand-write `<form>` tags or `fetch` calls — verify flags them.
-- **Styling is page-scoped CSS in the page module**: implement
-  `style/0` (plain CSS, auto-scoped — it cannot leak to other pages);
-  shared design tokens live in `assets/app.css`. Static files go in
-  `assets/static/`, referenced only via `asset_path/1` (missing files
-  fail verify). Never render `<style>` tags, never reference CDNs, and
-  there is no Node/bundler — don't add one. See `guides/assets.md`.
-- **Shared markup is a component**: one render-only module in
-  `lib/fractal/components/` (render + scoped style + example), used via
-  `component(Module, assigns)`. **Check the inventory first** —
-  `/fractal/components` in dev or the end of `mix fractal.ai.docs` —
-  and prefer extending over near-duplicating. Single-page markup stays
-  a private function in the page. See `guides/components.md`.
-- **Cross-cutting behavior is the checkpoint, not middleware**: pages
-  declare `require: :signed_in` (visible in the page file); the guard
-  names are defined once in the checkpoint module
-  (`lib/fractal/checkpoints.ex`, `guard ... do`), which also derives
-  `assigns.context` (e.g. the current user) and declares coverage
-  contracts (`expect "/admin", :signed_in` — verify fails unguarded
-  matches). Never put auth checks inside `render/1` or handlers, and
-  never ask for a middleware/plug hook — there isn't one. See
-  `guides/checkpoint.md`.
-- **Tests drive pages through `Fractal.Test`** (`get`, `post`, `put`,
-  `patch`, `delete`, `fire_event`, all with a `session:` opt).
-- Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
-  not hand-roll persistence.
-- **App-wide rules are invariants**: defined once in
-  `lib/fractal/invariants.ex` (`invariant "...", %{page: page} do`), run
-  by verify against every page. Check the inventory at the end of
-  `mix fractal.ai.docs` before writing a page. A page's own contract is
-  its test file — verify fails any page or component no test references —
-  and pages have no verification API of their own; never add one.
-- `mix fractal.verify` is the feedback loop. A change is not done until
-  it passes — it also fails on pending migrations.
+| Path | What |
+| --- | --- |
+| `lib/fractal/` | The framework: page/router/document/verify/checkpoint/invariant/layout/component/assets/test |
+| `lib/mix/tasks/` | `fractal.server`, `fractal.verify`, `fractal.ai.docs`, the `fractal.gen.*` generators |
+| `priv/guides/` | The guides `mix fractal.ai.docs` ships into every app — update them with behavior changes |
+| `test/` | Framework tests, mirroring `lib/`; DB-less and Postgres-free |
+| `test/support/fixtures.ex` | The fixture app: pages, a checkpoint, invariants, a layout, a component |
+| `test/integration/new_app_test.exs` | The born-green test (tagged `:integration`, excluded by default) |
+| `installer/` | Its own mix project: the `fractal.new` task + templates for every generated file |
+| `examples/blog/` | The showcase app (posts CRUD, login, admin, search) on `{:fractal, path: "../.."}` |
+| `project/` | The numbered design/task documents driving development |
 
-## Agent workflow
+## The philosophy (what changes must preserve)
 
-When asked to create or change a page or feature:
+Fractal is AI-first: primitives agents can consume and extend, prompt-first
+developer experience, built-in verification, built-in documentation.
+Derived principles that shape every API decision:
 
-1. **Read the docs first**: run `mix fractal.ai.docs` (or read
-   `guides/*.md`). They define page anatomy, conventions, and testing
-   expectations.
-2. **Scaffold**: for a static page,
-   `mix fractal.gen.page Name --path /route --title "Title"`. For a
-   database-backed resource with a form,
-   `mix fractal.gen.resource Name field:type ...` — it generates the
-   schema, the migration, the pages, and their tests; then run
-   `mix ecto.migrate`. Edit `render/1` for real content and keep the
-   tests asserting on it.
-3. **Verify**: run `mix fractal.verify`. Fix anything it reports and
-   re-run until green.
-4. In development, `mix fractal.server` auto-recompiles and reloads the
-   browser — no restarts needed to see the change.
+- **One file per page** — route, render, handlers, style together; no
+  routers, controllers, or templates to coordinate.
+- **Stateless server** — state travels with the request (session cookie,
+  event `values:`) or lives in the database.
+- **Named primitives over general mechanisms** — checkpoint, not
+  middleware; invariants, not hooks; `meta/1`, not a head template.
+- **Declared where it applies, defined in one well-known place,
+  guaranteed by verify** — `require: :guard` on the page, the guard in
+  the checkpoint module, `expect`/coverage enforced by
+  `mix fractal.verify`.
+- **The framework owns the document, the app's layout contributes data
+  and chrome, the page contributes content** — apps contribute data,
+  never envelope markup.
+- **Don't reimplement battle-tested plumbing** — Ecto, Plug, and Bandit
+  underneath; Fractal owns the shape, not the transport.
+- **Zero-API where the framework owns both ends** — CSRF, asset
+  fingerprinting, live reload just happen.
 
-## Commands
+When adding a feature, write the guide alongside it — `priv/guides/` is
+part of the product, and `mix fractal.ai.docs` is how apps' agents learn
+the feature exists.
+
+## Working on the framework
+
+- Framework tests must not need a database or the sample app. They run
+  against `test/support/fixtures.ex` — a tiny host app (pages under
+  `/fixtures`, `Fractal.Fixtures.Checkpoint`, `.Invariants`, `.Layout`,
+  `.Note`). The checkpoint/invariants/layout fixtures are the *only*
+  discovered instances — those modules are one-per-app, so don't add
+  rivals; extend the existing fixtures.
+- `mix test` runs the suite (integration excluded);
+  `mix test --only integration` generates a real app from the installer
+  templates and runs its full verify — run it after touching the
+  installer, the generators, or anything the templates rely on. It needs
+  Postgres (`postgres:postgres@localhost`, override with
+  `PGUSER`/`PGPASSWORD`/`PGHOST`).
+- The showcase app is the dogfood: after framework changes, run
+  `mix test && mix fractal.verify` inside `examples/blog/` too.
+- Namespaces derive from the host app (`Fractal.Discovery`) — never
+  hardcode an app name in framework code, generators, or templates.
+  Doc examples use `MyApp.*`.
+- Installer templates live in `installer/templates/` (`.eex`, embedded
+  at compile time; `app_name` path segments and `dot_` prefixes are
+  rewritten). Anything they generate must keep the born-green contract:
+  generate → `mix ecto.setup` → `mix fractal.verify` green, no manual
+  edits. No installer flags.
+- Elixir ~> 1.20. Format with `mix format` before finishing. Every
+  framework module has tests under `test/`, mirroring `lib/`.
+- Deps are git-pinned in `mix.exs` (see the comment there) — keep new
+  deps to effectively zero.
+
+## Commands (framework repo)
 
 | Command | Purpose |
 | --- | --- |
-| `mix fractal.server` | Start the dev server on port 4000 (live reload on) |
-| `mix fractal.gen.page Name` | Scaffold a static page + test |
-| `mix fractal.gen.page Name --events a,b` | Scaffold an interactive page + tests |
-| `mix fractal.gen.page Name --style` | Scaffold a page with a scoped style/0 block |
-| `mix fractal.gen.page Name --require guard` | Scaffold a guarded page |
-| `mix fractal.gen.resource Name field:type ...` | Scaffold schema + migration + form pages + tests |
-| `mix fractal.gen.component Name` | Scaffold a UI component + test (check /fractal/components first) |
-| `mix ecto.setup` / `mix ecto.migrate` | Create the database / run pending migrations |
-| `mix fractal.gen.secret` | Generate a session secret_key_base |
-| `mix fractal.verify` | Compile (warnings-as-errors) + migration check + page checks + tests |
-| `mix fractal.ai.docs` | Print the guides agents must read |
-| `mix test` | Run the test suite directly (creates/migrates the test DB) |
-
-## Conventions
-
-- Elixir ~> 1.20. Format with `mix format` before finishing.
-- Every module of framework code has test coverage under `test/`,
-  mirroring the `lib/` layout.
-- Keep pages self-contained; shared markup helpers belong in
-  `Fractal.HTML` or a dedicated module, not copied between pages.
-- Database tests use `Fractal.DataCase` (sandboxed, `async: true` safe).
-- Postgres defaults to `postgres:postgres@localhost`; override with
-  `PGUSER`/`PGPASSWORD`/`PGHOST`.
+| `mix test` | Framework suite (DB-less, integration excluded) |
+| `mix test --only integration` | The born-green installer test (needs Postgres) |
+| `mix fractal.server` | Serve the fixture-less framework root (mostly useful in `examples/blog/`) |
+| `mix format` | Format before finishing |
+| `cd examples/blog && mix fractal.verify` | Dogfood the framework end to end |
+| `cd installer && mix fractal.new path/to/app` | Generate an app by hand (`FRACTAL_PATH=$PWD/..` for the local checkout) |
 
 ## Model routing (through July 7)
 

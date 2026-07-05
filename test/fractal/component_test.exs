@@ -5,7 +5,7 @@ defmodule Fractal.ComponentTest do
   import Fractal.Component
   import Fractal.Test, only: [get: 1]
 
-  alias Fractal.Components.EmptyState
+  alias Fractal.Fixtures.Note
   alias Fractal.HTML
 
   defmodule Badge do
@@ -37,12 +37,8 @@ defmodule Fractal.ComponentTest do
 
     test "assigns carry safe HTML as slots" do
       html =
-        EmptyState
-        |> component(
-          title: "Empty",
-          back_href: "/",
-          back_label: HTML.tag(:strong, [], ["Home"])
-        )
+        Note
+        |> component(title: "Empty", body: HTML.tag(:strong, [], ["Home"]))
         |> HTML.safe_to_string()
 
       assert html =~ "<strong>Home</strong>"
@@ -69,16 +65,16 @@ defmodule Fractal.ComponentTest do
   end
 
   test "all/0 discovers components; component?/1 rejects non-components" do
-    assert EmptyState in all()
-    refute Fractal.Pages.Home in all()
-    assert component?(EmptyState)
-    refute component?(Fractal.Pages.Home)
+    assert Note in all()
+    refute Fractal.Fixtures.StaticPage in all()
+    assert component?(Note)
+    refute component?(Fractal.Fixtures.StaticPage)
     refute component?(Fractal.HTML)
   end
 
   test "slug/1 and style/1" do
-    assert slug(EmptyState) == "empty-state"
-    assert style(EmptyState) =~ "var(--muted)"
+    assert slug(Note) == "note"
+    assert style(Note) =~ "border-left"
     assert style(Badge) == nil
   end
 
@@ -103,10 +99,10 @@ defmodule Fractal.ComponentTest do
       conn = get("/fractal/components")
 
       assert conn.status == 200
-      assert conn.resp_body =~ "Fractal.Components.EmptyState"
+      assert conn.resp_body =~ "Fractal.Fixtures.Note"
       # the example, rendered live
-      assert conn.resp_body =~ "Nothing here yet"
-      assert conn.resp_body =~ ~s(data-component="empty-state")
+      assert conn.resp_body =~ "Heads up"
+      assert conn.resp_body =~ ~s(data-component="note")
       assert conn.resp_body =~ "Example assigns"
     end
 

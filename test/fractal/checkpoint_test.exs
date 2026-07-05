@@ -90,15 +90,15 @@ defmodule Fractal.CheckpointTest do
     assert Exception.message(error) =~ "duplicate guards"
   end
 
-  describe "run/2 (through the app's real Fractal.Checkpoints)" do
+  describe "run/2 (through the discovered fixture checkpoint)" do
     test "no guards required is always :ok" do
       assert Checkpoint.run([], %{}) == :ok
     end
 
     test "passes a signed-in session" do
-      assigns = %{session: %{}, context: %{"user_name" => "Ada"}, path: "/admin"}
+      assigns = %{session: %{}, context: %{"fixture_user" => "Ada"}, path: "/fixtures/admin"}
 
-      assert Checkpoint.run([:signed_in], assigns) == :ok
+      assert Checkpoint.run([:fixture_signed_in], assigns) == :ok
     end
 
     test "denies with a redirect and directives, and emits telemetry" do
@@ -111,11 +111,13 @@ defmodule Fractal.CheckpointTest do
 
       on_exit(fn -> :telemetry.detach("guard-denied-test") end)
 
-      assigns = %{session: %{}, context: %{"user_name" => nil}, path: "/admin"}
+      assigns = %{session: %{}, context: %{"fixture_user" => nil}, path: "/fixtures/admin"}
 
-      assert {:redirect, "/login", directives} = Checkpoint.run([:signed_in], assigns)
-      assert directives[:flash] == %{"error" => "Please log in first."}
-      assert_received {:denied, %{guard: :signed_in, path: "/admin"}}
+      assert {:redirect, "/fixtures", directives} =
+               Checkpoint.run([:fixture_signed_in], assigns)
+
+      assert directives[:flash] == %{"error" => "Fixtures say: log in first."}
+      assert_received {:denied, %{guard: :fixture_signed_in, path: "/fixtures/admin"}}
     end
 
     test "an undefined guard fails closed" do
@@ -126,10 +128,10 @@ defmodule Fractal.CheckpointTest do
   end
 
   test "the app's checkpoint module is discovered, once" do
-    assert Checkpoint.module() == Fractal.Checkpoints
-    assert Checkpoint.modules() == [Fractal.Checkpoints]
-    assert :signed_in in Checkpoint.names()
-    assert {"/admin", :signed_in} in Checkpoint.expectations()
+    assert Checkpoint.module() == Fractal.Fixtures.Checkpoint
+    assert Checkpoint.modules() == [Fractal.Fixtures.Checkpoint]
+    assert :fixture_signed_in in Checkpoint.names()
+    assert {"/fixtures/admin", :fixture_signed_in} in Checkpoint.expectations()
   end
 
   test "under?/2 is segment-aware" do

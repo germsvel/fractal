@@ -29,7 +29,7 @@ defmodule Fractal.InvariantTest do
            ]
 
     assert Fixture.run("always holds", %{}) == :ok
-    assert Fixture.run("page is not nil", %{page: Fractal.Pages.Home}) == :ok
+    assert Fixture.run("page is not nil", %{page: Fractal.Fixtures.StaticPage}) == :ok
     assert Fixture.run("page is not nil", %{page: nil}) == {:error, "no page"}
 
     assert Fixture.run("rendered mentions fractal", %{rendered: "no"}) ==
@@ -77,19 +77,20 @@ defmodule Fractal.InvariantTest do
   end
 
   test "the app's invariants module is discovered, once" do
-    assert Invariant.module() == Fractal.Invariants
-    assert Invariant.modules() == [Fractal.Invariants]
+    assert Invariant.module() == Fractal.Fixtures.Invariants
+    assert Invariant.modules() == [Fractal.Fixtures.Invariants]
     assert "title fits in a search result" in Invariant.names()
     assert "every page renders exactly one h1" in Invariant.names()
   end
 
   test "run/2 dispatches to the discovered module" do
-    assert Invariant.run("title fits in a search result", %{page: Fractal.Pages.Home}) == :ok
+    assert Invariant.run("title fits in a search result", %{page: Fractal.Fixtures.StaticPage}) ==
+             :ok
   end
 
   test "invariant_module?/1 rejects non-invariant modules" do
-    assert Invariant.invariant_module?(Fractal.Invariants)
-    refute Invariant.invariant_module?(Fractal.Pages.Home)
-    refute Invariant.invariant_module?(Fractal.Checkpoints)
+    assert Invariant.invariant_module?(Fractal.Fixtures.Invariants)
+    refute Invariant.invariant_module?(Fractal.Fixtures.StaticPage)
+    refute Invariant.invariant_module?(Fractal.Fixtures.Checkpoint)
   end
 end

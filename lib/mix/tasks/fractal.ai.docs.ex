@@ -2,28 +2,29 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
   @shortdoc "Prints the framework documentation intended for AI agents"
 
   @moduledoc """
-  Prints Fractal's guides to stdout.
+  Prints Fractal's guides to stdout, followed by the app's live
+  inventories (components, guards, invariants).
 
       mix fractal.ai.docs
 
-  This is the entry point for AI agents working on a Fractal app: run it
-  (or read the files in `guides/`) before generating any code. The guides
-  cover page anatomy, conventions, and the verification workflow.
+  This is the entry point for AI agents working on a Fractal app: run
+  it before generating any code. The guides ship inside the framework
+  package, so documentation improvements reach every app on upgrade.
   """
 
   use Mix.Task
 
   @impl Mix.Task
   def run(_args) do
-    case Path.wildcard("guides/*.md") do
+    case Path.wildcard(Path.join(guides_dir(), "*.md")) do
       [] ->
-        Mix.raise("no guides found in guides/ — run this task from the project root")
+        Mix.raise("no guides found in the fractal package (#{guides_dir()})")
 
       guides ->
         guides
         |> Enum.sort()
         |> Enum.each(fn file ->
-          Mix.shell().info("\n<!-- #{file} -->\n")
+          Mix.shell().info("\n<!-- guide: #{Path.basename(file)} -->\n")
           Mix.shell().info(File.read!(file))
         end)
     end
@@ -31,6 +32,14 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
     print_component_inventory()
     print_guard_inventory()
     print_invariant_inventory()
+  end
+
+  # the guides live in the framework package, not the app
+  defp guides_dir do
+    case :code.priv_dir(:fractal) do
+      {:error, _reason} -> "priv/guides"
+      dir -> Path.join(List.to_string(dir), "guides")
+    end
   end
 
   defp print_invariant_inventory do

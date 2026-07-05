@@ -12,8 +12,8 @@ defmodule Fractal.Checkpoint do
       # the page says it — visible in the one file that matters
       use Fractal.Page, path: "/admin", title: "Admin", require: :signed_in
 
-      # lib/fractal/checkpoints.ex — the ONE module defining what names mean
-      defmodule Fractal.Checkpoints do
+      # lib/my_app/checkpoints.ex — the ONE module defining what names mean
+      defmodule MyApp.Checkpoints do
         use Fractal.Checkpoint
 
         def context(assigns) do
@@ -222,7 +222,7 @@ defmodule Fractal.Checkpoint do
     mod =
       module() ||
         raise "pages require guards #{inspect(names)} but there is no checkpoint module — " <>
-                "create lib/fractal/checkpoints.ex with `use Fractal.Checkpoint`"
+                "create lib/my_app/checkpoints.ex with `use Fractal.Checkpoint`"
 
     Enum.reduce_while(names, :ok, fn name, :ok ->
       case mod.check(name, assigns) do

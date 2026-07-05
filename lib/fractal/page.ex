@@ -4,7 +4,7 @@ defmodule Fractal.Page do
   routes and handles them — including form submissions for the full
   create/update/destroy lifecycle.
 
-      defmodule Fractal.Pages.About do
+      defmodule MyApp.Pages.About do
         @moduledoc "The About page, served at /about."
         use Fractal.Page, path: "/about", title: "About"
 
@@ -55,7 +55,8 @@ defmodule Fractal.Page do
 
   Styles are collected into the app stylesheet automatically and scoped
   to the page (they cannot affect other pages). Shared design tokens
-  live in `assets/app.css`. See `Fractal.Assets` and `guides/assets.md`.
+  live in `assets/app.css`. See `Fractal.Assets` and the assets guide
+  in `mix fractal.ai.docs`.
 
   Shared markup belongs in components — one-file modules rendered with
   the imported `component/2` helper. Check `/fractal/components` (dev)
@@ -94,7 +95,7 @@ defmodule Fractal.Page do
 
   ## Form submissions
 
-      defmodule Fractal.Pages.EditPost do
+      defmodule MyApp.Pages.EditPost do
         use Fractal.Page,
           path: "/posts/:id/edit",
           title: "Edit post",
@@ -108,9 +109,9 @@ defmodule Fractal.Page do
 
         @impl Fractal.Page
         def handle_put(assigns) do
-          post = Fractal.Repo.get(Fractal.Post, assigns.params["id"])
+          post = MyApp.Repo.get(MyApp.Post, assigns.params["id"])
 
-          case Fractal.Repo.update(Fractal.Post.changeset(post, assigns.params)) do
+          case MyApp.Repo.update(MyApp.Post.changeset(post, assigns.params)) do
             {:ok, post} -> {:redirect, "/posts/\#{post.id}"}
             {:error, changeset} -> {:render, %{changeset: changeset}}
           end
@@ -405,7 +406,7 @@ defmodule Fractal.Page do
   @doc """
   The page's slug, used to scope its styles (`data-page` attribute).
 
-      iex> Fractal.Page.slug(Fractal.Pages.NewPost)
+      iex> Fractal.Page.slug(MyApp.Pages.NewPost)
       "new-post"
   """
   @spec slug(module()) :: String.t()

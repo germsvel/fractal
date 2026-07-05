@@ -1,0 +1,13 @@
+defmodule <%= @mod %>.CheckpointsTest do
+  use ExUnit.Case, async: true
+
+  alias <%= @mod %>.Checkpoints
+
+  test "is the app's single discovered checkpoint module" do
+    assert Fractal.Checkpoint.module() == Checkpoints
+  end
+
+  test "context tolerates an empty session" do
+    assert Checkpoints.context(%{session: %{}}) == %{}
+  end
+end

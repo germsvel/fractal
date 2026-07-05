@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
       and tests that exercise each event through the router (see
       `Fractal.Interactive`)
     * `--style` — include a scaffold `style/0` (page-scoped CSS; see
-      `guides/assets.md`)
+      the assets guide)
     * `--require` — comma-separated guard names the page requires (see
       `Fractal.Checkpoint`)
 

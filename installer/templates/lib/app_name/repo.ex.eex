@@ -1,0 +1,13 @@
+defmodule <%= @mod %>.Repo do
+  @moduledoc """
+  The app's Ecto repository (PostgreSQL).
+
+  Database access goes through Ecto — schemas, changesets, and queries —
+  rather than any framework-specific layer. See the forms_and_data guide
+  in `mix fractal.ai.docs`.
+  """
+
+  use Ecto.Repo,
+    otp_app: :<%= @app %>,
+    adapter: Ecto.Adapters.Postgres
+end

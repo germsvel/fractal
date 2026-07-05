@@ -9,8 +9,8 @@ defmodule Fractal.Invariant do
   lets the app add its own — defined once, in one well-known place, and
   run by `mix fractal.verify` against all pages uniformly:
 
-      # lib/fractal/invariants.ex
-      defmodule Fractal.Invariants do
+      # lib/my_app/invariants.ex
+      defmodule MyApp.Invariants do
         use Fractal.Invariant
 
         invariant "title fits in a search result", %{page: page} do

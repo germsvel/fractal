@@ -460,7 +460,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
         pages = [
           #{ctx.ns}.Pages.#{ctx.camel_plural},
           #{ctx.ns}.Pages.New#{ctx.camel},
-          Fractal.Pages.#{ctx.camel},
+          #{ctx.ns}.Pages.#{ctx.camel},
           #{ctx.ns}.Pages.Edit#{ctx.camel}
         ]
 

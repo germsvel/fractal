@@ -8,8 +8,7 @@ defmodule Fractal.MixProject do
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      deps: deps(),
-      aliases: aliases()
+      deps: deps()
     ]
   end
 
@@ -54,14 +53,6 @@ defmodule Fractal.MixProject do
       {:db_connection,
        git: "https://github.com/elixir-ecto/db_connection.git", tag: "v2.10.1", override: true},
       {:decimal, git: "https://github.com/ericmj/decimal.git", tag: "v3.1.1", override: true}
-    ]
-  end
-
-  defp aliases do
-    [
-      "ecto.setup": ["ecto.create", "ecto.migrate"],
-      "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
     ]
   end
 end

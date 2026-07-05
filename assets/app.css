@@ -1,7 +1,7 @@
 /* Fractal's shared stylesheet: design tokens and app-wide styles.
    Page-specific styles belong in each page module's style/0 — they are
    scoped automatically and cannot leak between pages. See
-   guides/assets.md. */
+   the assets guide in `mix fractal.ai.docs`. */
 
 :root {
   color-scheme: light dark;

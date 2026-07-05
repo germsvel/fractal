@@ -6,7 +6,16 @@ defmodule Fractal.RouterTest do
   import Fractal.Test
   import Plug.Test, only: [conn: 3]
 
-  alias Fractal.Fixtures.{EchoPage, EditPage, EventPage, FormPage, ShowPage, StaticPage}
+  alias Fractal.Fixtures.{
+    EchoPage,
+    EditPage,
+    EventPage,
+    FormPage,
+    GuardedPage,
+    ShowPage,
+    StaticPage
+  }
+
   alias Fractal.Router
 
   # a request built without the Fractal.Test helpers: no test session,
@@ -24,6 +33,19 @@ defmodule Fractal.RouterTest do
     assert FormPage in pages
     assert EditPage in pages
     assert EventPage in pages
+    assert GuardedPage in pages
+  end
+
+  test "a guarded page denies without its context and renders with it" do
+    denied = get("/fixtures/admin")
+
+    assert denied.status == 303
+    assert Plug.Conn.get_resp_header(denied, "location") == ["/fixtures"]
+
+    ok = get("/fixtures/admin", %{}, session: %{"fixture_user" => "Ada"})
+
+    assert ok.status == 200
+    assert ok.resp_body =~ "Hello, Ada"
   end
 
   test "GET renders a page inside the document" do

@@ -49,7 +49,7 @@ defmodule Fractal.PageTest do
 
   test "page?/1 recognizes pages and rejects other modules" do
     assert Fractal.Page.page?(Sample)
-    assert Fractal.Page.page?(Fractal.Pages.Home)
+    assert Fractal.Page.page?(Fractal.Fixtures.StaticPage)
     refute Fractal.Page.page?(Fractal.HTML)
     refute Fractal.Page.page?(:not_a_module)
   end
@@ -178,8 +178,8 @@ defmodule Fractal.PageTest do
   end
 
   test "slug/1 derives the data-page slug from the module" do
-    assert Fractal.Page.slug(Fractal.Pages.Home) == "home"
-    assert Fractal.Page.slug(Fractal.Pages.NewPost) == "new-post"
+    assert Fractal.Page.slug(Fractal.Fixtures.StaticPage) == "static-page"
+    assert Fractal.Page.slug(Fractal.Fixtures.EditPage) == "edit-page"
     assert Fractal.Page.slug(Styled) == "styled"
   end
 
