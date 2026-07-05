@@ -223,20 +223,20 @@ touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
 
-- [ ] A page can declare `watch:`, implement `handle_watch/2`, and any
+- [x] A page can declare `watch:`, implement `handle_watch/2`, and any
   code can `publish/1`; browsers on that page receive re-rendered
   fragments over SSE with no user-written JavaScript — demonstrated live
   over real HTTP (two clients, one publishes, the other updates).
-- [ ] Pages without `watch:` open no connection; guarded pages refuse
+- [x] Pages without `watch:` open no connection; guarded pages refuse
   subscriptions that fail their guards.
-- [ ] Reconnect self-heals: killing the connection and reconnecting
+- [x] Reconnect self-heals: killing the connection and reconnecting
   yields a correct page with no missed-update artifacts.
-- [ ] Compile-time pairing and binding checks fail broken pages with
+- [x] Compile-time pairing and binding checks fail broken pages with
   named fixes; verify smoke-runs handlers and cross-checks the
   publish/watch topology; `mix fractal.ai.docs` prints the topic
   inventory.
-- [ ] `fire_watch` drives watch handlers in tests; framework suite stays
+- [x] `fire_watch` drives watch handlers in tests; framework suite stays
   DB-less and green; `examples/blog` dogfoods a live region with tests
   and full verify green.
-- [ ] `priv/guides/push.md` ships with the feature; the installer's
+- [x] `priv/guides/push.md` ships with the feature; the installer's
   AGENTS.md template mentions the primitive.

@@ -33,6 +33,22 @@ defmodule Blog.Pages.PostsTest do
     assert conn.resp_body =~ "some value 1"
   end
 
+  test "the index is live: a publish on \"posts\" re-renders the list" do
+    {:ok, _post} =
+      Repo.insert(Blog.Post.changeset(%Blog.Post{}, @valid_params))
+
+    conn = fire_watch("/posts", "posts")
+
+    assert conn.status == 200
+    assert conn.resp_body =~ ~s(id="posts")
+    assert conn.resp_body =~ "some value 1"
+    refute conn.resp_body =~ "<html", "pushed fragments are not wrapped in the document"
+  end
+
+  test "the index page carries the watch on-switch" do
+    assert get("/posts").resp_body =~ ~s(<main data-page="posts" data-fx-watch>)
+  end
+
   test "GET /posts/new shows the form" do
     conn = get("/posts/new")
 

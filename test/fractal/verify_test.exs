@@ -580,6 +580,161 @@ defmodule Fractal.VerifyTest do
     end
   end
 
+  # declares watches but bypasses the compile-time handle_watch check
+  defmodule SneakyWatches do
+    @behaviour Fractal.Page
+
+    @impl Fractal.Page
+    def path, do: "/verify-sneaky-watches"
+
+    @impl Fractal.Page
+    def title, do: "Sneaky watches"
+
+    @impl Fractal.Page
+    def watches, do: ["verify/sneaky"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: "x"
+  end
+
+  defmodule RootlessWatchPage do
+    use Fractal.Page, path: "/verify-rootless-watch", watch: ["verify/rootless"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+
+    @impl Fractal.Page
+    def handle_watch(_topic, _assigns), do: {:fragment, tag(:p, [], ["no root id"])}
+  end
+
+  defmodule RaisingWatchPage do
+    use Fractal.Page, path: "/verify-raising-watch", watch: ["verify/raising"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+
+    @impl Fractal.Page
+    def handle_watch(_topic, _assigns), do: raise("watch boom")
+  end
+
+  defmodule RenderReturnWatchPage do
+    use Fractal.Page, path: "/verify-render-watch", watch: ["verify/render-return"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+
+    @impl Fractal.Page
+    def handle_watch(_topic, _assigns), do: {:render, %{}}
+  end
+
+  defmodule GhostWatchPage do
+    use Fractal.Page, path: "/verify-ghost-watch", watch: ["verify/ghost"]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+
+    @impl Fractal.Page
+    def handle_watch(_topic, _assigns), do: {:fragment, tag(:p, [id: "ghost"], ["x"])}
+  end
+
+  describe "watches" do
+    test "the fixture watch pages pass every watch check" do
+      results = Verify.run([Fractal.Fixtures.WatchPage, Fractal.Fixtures.GuardedPage])
+      assert Verify.ok?(results), inspect(Verify.errors(results))
+
+      assert Enum.any?(results, fn {name, _} ->
+               name =~ "handles watch 'fixtures/rooms/:room/ticks'"
+             end)
+    end
+
+    test "detects declared watches without handle_watch/2" do
+      errors = Verify.errors(Verify.run([SneakyWatches]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "handles its watches" and message =~ "does not export handle_watch/2"
+             end)
+    end
+
+    test "a pushed fragment must carry a root id" do
+      errors = Verify.errors(Verify.run([RootlessWatchPage]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "handles watch 'verify/rootless'" and
+                 message =~ "root element needs an id"
+             end)
+    end
+
+    test "a raising or misshapen watch handler fails with a pointer" do
+      errors = Verify.errors(Verify.run([RaisingWatchPage]))
+
+      assert Enum.any?(errors, fn {_name, {:error, message}} ->
+               message =~ "handle_watch/2 raised" and message =~ "watch boom"
+             end)
+
+      errors = Verify.errors(Verify.run([RenderReturnWatchPage]))
+
+      assert Enum.any?(errors, fn {_name, {:error, message}} ->
+               message =~ "must return {:fragment, content} or {:redirect, to}"
+             end)
+    end
+
+    test "topics/1 passes watched topics with publishers and fails dead wires" do
+      # the fixture publisher (test/support) covers both fixture topics
+      assert Verify.ok?(Verify.topics([Fractal.Fixtures.WatchPage]))
+
+      assert [{name, {:error, message}}] = Verify.errors(Verify.topics([GhostWatchPage]))
+      assert name == "topic 'verify/ghost' has a publisher"
+      assert message =~ "no publish(...) call found"
+    end
+
+    @tag :tmp_dir
+    test "interpolated and dynamic publishes match :name segments", %{tmp_dir: tmp_dir} do
+      File.cd!(tmp_dir, fn ->
+        File.mkdir_p!("lib")
+
+        File.write!("lib/publisher.ex", """
+        defmodule Verify.TmpPublisher do
+          import Fractal.Interactive, only: [publish: 1]
+
+          def created(id), do: publish("verify/rooms/\#{id}/msgs")
+        end
+        """)
+
+        # GhostWatchPage watches "verify/ghost" — unmatched by the
+        # interpolated publish, still a dead wire
+        refute Verify.ok?(Verify.topics([GhostWatchPage]))
+
+        File.write!("lib/dynamic.ex", """
+        defmodule Verify.TmpDynamic do
+          import Fractal.Interactive, only: [publish: 1]
+
+          def forward(topic), do: publish(topic)
+        end
+        """)
+
+        # a fully dynamic publish could publish anything
+        assert Verify.ok?(Verify.topics([GhostWatchPage]))
+      end)
+    end
+
+    @tag :tmp_dir
+    test "unwatched_topics/0 lists published topics nothing watches", %{tmp_dir: tmp_dir} do
+      File.cd!(tmp_dir, fn ->
+        File.mkdir_p!("lib")
+
+        File.write!("lib/publisher.ex", """
+        defmodule Verify.TmpOrphanPublisher do
+          import Fractal.Interactive, only: [publish: 1]
+
+          def nudge, do: publish("verify/orphan/topic")
+        end
+        """)
+
+        assert "verify/orphan/topic" in Verify.unwatched_topics()
+      end)
+    end
+  end
+
   describe "guards" do
     test "detects require: of an undefined guard, naming the fix" do
       results = Verify.run([UndefinedGuardPage])

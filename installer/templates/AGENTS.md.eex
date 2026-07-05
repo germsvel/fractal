@@ -33,6 +33,12 @@ guides plus this app's live inventories (components, guards, invariants).
   `handle_event/2` returning `{:fragment, ...}`. State travels with the
   event (`values:`) or lives in the database — the server is stateless.
   See the interactivity guide. Never write `<script>` tags.
+- **Server push is `watch:` + `publish/1`**: a page declares
+  path-shaped topics (`watch: ["rooms/:id/messages"]`, segments bound
+  from its own path params) and re-renders fragments in
+  `handle_watch/2`; `publish/1` is a payload-free doorbell — handlers
+  re-query the database. No WebSockets, no wildcards; verify fails
+  watched topics nothing publishes. See the push guide.
 - **Sessions are encrypted cookies**: read `assigns.session`
   (string-keyed, like params); write via result directives —
   `{:redirect, to, session: %{...}}`, `clear_session: true`,
@@ -63,7 +69,8 @@ guides plus this app's live inventories (components, guards, invariants).
   never ask for a middleware/plug hook — there isn't one. See the
   checkpoint guide.
 - **Tests drive pages through `Fractal.Test`** (`get`, `post`, `put`,
-  `patch`, `delete`, `fire_event`, all with a `session:` opt).
+  `patch`, `delete`, `fire_event`, `fire_watch`, all with a `session:`
+  opt).
 - Data is **Ecto + PostgreSQL** (schemas, changesets, migrations). Do
   not hand-roll persistence. Database tests use `<%= @mod %>.DataCase`
   (sandboxed, `async: true` safe).

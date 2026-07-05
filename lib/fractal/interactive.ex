@@ -35,6 +35,10 @@ defmodule Fractal.Interactive do
   (which is why the region carries an `id` and the trigger points at
   it).
 
+  The reverse direction — the server pushing to the browser — is the
+  page-level `watch:` declaration plus `publish/1` (both documented in
+  `Fractal.Page` and the push guide). The same runtime handles both.
+
   ## Trigger sources
 
     * `on: :click` (default) — buttons, links
@@ -96,6 +100,30 @@ defmodule Fractal.Interactive do
     tag(:button, [type: "button"] ++ fx(event, fx_opts) ++ button_attrs, [label])
   end
 
+  @doc """
+  Rings the doorbell for a watch topic: every browser on a page watching
+  `topic` re-runs that page's `handle_watch/2` and receives the fresh
+  fragment.
+
+      publish("rooms/\#{message.room_id}/messages")
+
+  The topic must be concrete (no `:name` segments left) and carries no
+  payload — subscribers re-render from the database, so a missed publish
+  costs nothing and the pub/sub backend stays swappable. Callable from
+  page handlers (imported by `use Fractal.Page`) or any other code.
+  Returns `:ok`.
+  """
+  @spec publish(String.t()) :: :ok
+  def publish(topic) do
+    unless Fractal.Bus.concrete_topic?(topic) do
+      raise ArgumentError,
+            "publish/1 needs a concrete, path-shaped topic like \"rooms/42/messages\" " <>
+              "(no leading slash, no :name segments), got: #{inspect(topic)}"
+    end
+
+    Fractal.Bus.broadcast(topic)
+  end
+
   @doc false
   def runtime_js do
     """
@@ -146,6 +174,27 @@ defmodule Fractal.Interactive do
       document.addEventListener("change", handler("change", true));
       document.addEventListener("submit", handler("submit", true));
       document.addEventListener("input", handler("input", false));
+
+      // server push: pages that declare watch: carry data-fx-watch on
+      // <main>; one EventSource per tab, fragments swap by root id, and
+      // the browser's native reconnect re-runs the initial catch-up
+      if (document.querySelector("main[data-fx-watch]") && window.EventSource) {
+        var source = new EventSource(
+          "/fractal/watch?_fx_path=" + encodeURIComponent(window.location.pathname)
+        );
+        source.onmessage = function (e) {
+          var tpl = document.createElement("template");
+          tpl.innerHTML = e.data;
+          var next = tpl.content.firstElementChild;
+          if (!next || !next.id) return;
+          var current = document.getElementById(next.id);
+          if (current) current.replaceWith(next);
+        };
+        source.addEventListener("fx-redirect", function (e) {
+          source.close();
+          window.location.href = e.data;
+        });
+      }
     })();
     </script>
     """

@@ -25,6 +25,11 @@ defmodule Mix.Tasks.Fractal.Ai.DocsTest do
     assert output =~
              "every page under /fixtures/admin must declare require: :fixture_signed_in"
 
+    assert output =~ "watch topic inventory"
+
+    assert output =~
+             "- fixtures/ticks — watched by Fractal.Fixtures.GuardedPage (/fixtures/admin)"
+
     assert output =~ "invariant inventory"
     assert output =~ "- title fits in a search result"
     assert output =~ "- meta description fits a search snippet"

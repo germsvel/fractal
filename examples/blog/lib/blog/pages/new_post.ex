@@ -26,8 +26,13 @@ defmodule Blog.Pages.NewPost do
   @impl Fractal.Page
   def handle_post(assigns) do
     case Repo.insert(Blog.Post.changeset(%Blog.Post{}, assigns.params)) do
-      {:ok, post} -> {:redirect, "/posts/#{post.id}"}
-      {:error, changeset} -> {:render, %{changeset: changeset}}
+      {:ok, post} ->
+        # browsers on the posts index re-render their list live
+        publish("posts")
+        {:redirect, "/posts/#{post.id}"}
+
+      {:error, changeset} ->
+        {:render, %{changeset: changeset}}
     end
   end
 end

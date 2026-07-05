@@ -202,6 +202,102 @@ defmodule Fractal.PageTest do
     assert Fractal.Page.events(Sample) == []
   end
 
+  test "watches/0 defaults to [] and reflects the :watch option" do
+    assert Sample.watches() == []
+
+    assert Fractal.Fixtures.WatchPage.watches() == [
+             "fixtures/rooms/:room/ticks",
+             "fixtures/ticks"
+           ]
+
+    assert Fractal.Page.watches(Fractal.Fixtures.WatchPage) != []
+    assert Fractal.Page.watches(Sample) == []
+  end
+
+  test "declaring watch: without handle_watch/2 fails to compile" do
+    error =
+      try do
+        defmodule WatchNoHandler do
+          use Fractal.Page, path: "/wnh", watch: ["wnh/topic"]
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not define handle_watch/2"
+  end
+
+  test "defining handle_watch/2 without watch: fails to compile" do
+    error =
+      try do
+        defmodule HandlerNoWatch do
+          use Fractal.Page, path: "/hnw"
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_watch(_topic, _assigns), do: {:fragment, "x"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "does not declare its"
+  end
+
+  test "a watched topic's params must bind from the page's path" do
+    error =
+      try do
+        defmodule UnboundWatch do
+          use Fractal.Page, path: "/unbound-watch", watch: ["rooms/:id/messages"]
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_watch(_topic, _assigns), do: {:fragment, "x"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ ~s{params ["id"]}
+    assert Exception.message(error) =~ "must all come from the page's own path params"
+  end
+
+  test "malformed watch topics fail to compile" do
+    error =
+      try do
+        defmodule SlashWatch do
+          use Fractal.Page, path: "/slash-watch", watch: ["/leading/slash"]
+
+          @impl Fractal.Page
+          def render(_assigns), do: "x"
+
+          def handle_watch(_topic, _assigns), do: {:fragment, "x"}
+        end
+
+        :no_raise
+      rescue
+        exception -> exception
+      end
+
+    refute error == :no_raise
+    assert Exception.message(error) =~ "path-shaped topics"
+    assert Exception.message(error) =~ "no leading slash, no wildcards"
+  end
+
   test "declaring events: without handle_event/2 fails to compile" do
     error =
       try do

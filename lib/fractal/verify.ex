@@ -18,6 +18,11 @@ defmodule Fractal.Verify do
       handler (`handle_post/1`, `handle_put/1`, `handle_delete/1`)
     * declared events are unique non-empty strings and `handle_event/2`
       is exported when a page declares any
+    * declared watch topics are well-formed (path-shaped, params bound
+      by the page's path), `handle_watch/2` is exported, and every
+      handler smoke-runs to a fragment with a root id (or a redirect);
+      `topics/0` additionally checks that every watched topic has a
+      `publish/1` call somewhere in the app's sources
     * `style/0` (when defined) returns well-formed CSS (balanced braces)
     * every `require:` names a defined guard, and every `expect/2`
       declaration is honored by every matching page (see `Fractal.Checkpoint`)
@@ -373,6 +378,122 @@ defmodule Fractal.Verify do
   end
 
   @doc """
+  Checks the app's push topology: every watched topic has a publisher.
+
+  Watches are declarations and publishes are calls, so the wiring is
+  statically checkable: a watched topic no code publishes is a dead wire
+  and fails. Publish calls are found by scanning the app's sources
+  (`lib/` and `test/support/`); interpolated segments match any `:name`
+  segment, and a fully dynamic `publish(expr)` is treated as able to
+  publish anything.
+  """
+  @spec topics([module()]) :: [result()]
+  def topics(pages \\ Router.pages()) do
+    watched = pages |> Enum.flat_map(&safe_watches/1) |> Enum.uniq()
+
+    case watched do
+      [] ->
+        [{"watch topics are published", :ok}]
+
+      watched ->
+        published = published_topics()
+
+        for topic <- watched do
+          name = "topic '#{topic}' has a publisher"
+
+          if Enum.any?(published, &topic_match?(topic, &1)) do
+            {name, :ok}
+          else
+            {name,
+             {:error,
+              "no publish(...) call found for it — ring the doorbell with publish/1 " <>
+                "(interpolating the :name segments) wherever its data changes, or " <>
+                "remove the watch"}}
+          end
+        end
+    end
+  end
+
+  @doc """
+  Published topics no page watches. Informational — reported by
+  `mix fractal.verify`, but not a failure (a publisher may predate its
+  first subscriber).
+  """
+  @spec unwatched_topics() :: [String.t()]
+  def unwatched_topics do
+    watched = Router.pages() |> Enum.flat_map(&safe_watches/1)
+
+    published_topics()
+    |> Enum.reject(&(&1 == :dynamic))
+    |> Enum.uniq()
+    |> Enum.reject(fn published -> Enum.any?(watched, &topic_match?(&1, published)) end)
+    |> Enum.sort()
+  end
+
+  defp published_topics do
+    ["lib/**/*.ex", "test/support/**/*.ex"]
+    |> Enum.flat_map(&Path.wildcard/1)
+    |> Enum.flat_map(&file_published_topics/1)
+  end
+
+  defp file_published_topics(file) do
+    case Code.string_to_quoted(File.read!(file)) do
+      {:ok, ast} ->
+        {_ast, topics} =
+          Macro.prewalk(ast, [], fn
+            # a `def publish(topic)` head is a definition, not a call
+            {def_kind, meta, [_head | rest]}, acc when def_kind in [:def, :defp] ->
+              {{def_kind, meta, [:__fractal_pruned_head__ | rest]}, acc}
+
+            # module attributes (@spec publish(...), docs) are not calls
+            {:@, _meta, _args}, acc ->
+              {:__fractal_pruned_attribute__, acc}
+
+            {:publish, _meta, [arg]} = node, acc ->
+              {node, [normalize_published(arg) | acc]}
+
+            {{:., _, [_module, :publish]}, _meta, [arg]} = node, acc ->
+              {node, [normalize_published(arg) | acc]}
+
+            node, acc ->
+              {node, acc}
+          end)
+
+        topics
+
+      {:error, _reason} ->
+        []
+    end
+  end
+
+  defp normalize_published(arg) when is_binary(arg), do: arg
+
+  # publish("rooms/\#{id}/messages") — interpolations become :_ segments
+  defp normalize_published({:<<>>, _meta, parts}) do
+    Enum.map_join(parts, "", fn
+      part when is_binary(part) -> part
+      _interpolation -> ":_"
+    end)
+  end
+
+  # publish(some_variable) — could publish anything
+  defp normalize_published(_expr), do: :dynamic
+
+  defp topic_match?(_watched, :dynamic), do: true
+
+  defp topic_match?(watched, published) do
+    watched_segments = String.split(watched, "/")
+    published_segments = String.split(published, "/")
+
+    length(watched_segments) == length(published_segments) and
+      watched_segments
+      |> Enum.zip(published_segments)
+      |> Enum.all?(fn {w, p} ->
+        String.starts_with?(w, ":") or String.contains?(p, ":_") or w == p
+      end)
+  end
+
+  @doc """
   Guards no page requires. Informational — reported by
   `mix fractal.verify`, but not a failure.
   """
@@ -515,11 +636,12 @@ defmodule Fractal.Verify do
       action_checks ++
       [
         {"#{inspect(page)} handles its events", validate_events(page)},
+        {"#{inspect(page)} handles its watches", validate_watches(page)},
         {"#{inspect(page)} requires defined guards", validate_requires(page)},
         {"#{inspect(page)} declares valid meta", validate_meta(page)},
         {"#{inspect(page)} declares valid styles", validate_style(page)},
         {"#{inspect(page)} renders", validate_render(page)}
-      ]
+      ] ++ watch_render_checks(page)
   end
 
   defp invariant_checks(page, names) do
@@ -688,6 +810,90 @@ defmodule Fractal.Verify do
     end
   rescue
     exception -> {:error, "events/0 raised: #{Exception.message(exception)}"}
+  end
+
+  # the compile-time checks, re-run here to catch pages that bypassed
+  # `use Fractal.Page` (same spirit as validate_events)
+  defp validate_watches(page) do
+    watches = Page.watches(page)
+    path = safe_route(page, & &1.path())
+    path_params = if path && Page.route?(path), do: Page.params(path), else: []
+
+    unbound =
+      watches
+      |> Enum.filter(&Fractal.Bus.valid_topic?/1)
+      |> Enum.flat_map(&Fractal.Bus.topic_params/1)
+      |> Enum.uniq()
+      |> Kernel.--(path_params)
+
+    cond do
+      not Page.valid_watches?(watches) ->
+        {:error,
+         "invalid watch topics #{inspect(watches)} — must be unique, path-shaped topics " <>
+           "like \"rooms/:id/messages\" (no leading slash, no wildcards)"}
+
+      watches != [] and not function_exported?(page, :handle_watch, 2) ->
+        {:error, "declares watch: #{inspect(watches)} but does not export handle_watch/2"}
+
+      unbound != [] ->
+        {:error,
+         "watches topics with params #{inspect(unbound)} that its path does not bind — " <>
+           "a watched topic's :name segments must all come from the page's path params"}
+
+      true ->
+        :ok
+    end
+  rescue
+    exception -> {:error, "watches/0 raised: #{Exception.message(exception)}"}
+  end
+
+  # smoke-run every watch handler: a pushed fragment goes through the
+  # same scans as any render
+  defp watch_render_checks(page) do
+    for topic <- safe_watches(page) do
+      {"#{inspect(page)} handles watch '#{topic}'", validate_watch_handler(page, topic)}
+    end
+  end
+
+  defp validate_watch_handler(page, topic) do
+    case page.handle_watch(topic, smoke_assigns(page)) do
+      {:fragment, content} ->
+        html = content |> HTML.to_safe() |> HTML.safe_to_string()
+
+        with :ok <- scan_html(html) do
+          validate_fragment_root(html)
+        end
+
+      {:redirect, to} when is_binary(to) ->
+        :ok
+
+      other ->
+        {:error,
+         "handle_watch/2 must return {:fragment, content} or {:redirect, to}, " <>
+           "got: #{inspect(other)}"}
+    end
+  rescue
+    exception -> {:error, "handle_watch/2 raised: #{Exception.message(exception)}"}
+  end
+
+  # a pushed fragment replaces the element matching its root id — a
+  # fragment without one renders nowhere
+  defp validate_fragment_root(html) do
+    case Regex.run(~r/\A\s*<[a-zA-Z][^>]*\sid="[^"]+"/, html) do
+      nil ->
+        {:error,
+         "the pushed fragment's root element needs an id — that id is what the " <>
+           "runtime replaces in the page"}
+
+      _match ->
+        :ok
+    end
+  end
+
+  defp safe_watches(page) do
+    Page.watches(page)
+  rescue
+    _exception -> []
   end
 
   defp method_name(action), do: action |> to_string() |> String.upcase()

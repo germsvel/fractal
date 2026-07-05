@@ -106,8 +106,9 @@ updated value). Undeclared events return 404; handler crashes return
 
 - The runtime swaps `outerHTML` of one target per event — no DOM
   diffing, no streams. Keep regions small.
-- No WebSocket push yet; every update is user-initiated. The design
-  leaves room for a push transport later without changing the page API.
+- Events are user-initiated. For the reverse direction — the server
+  pushing updates to browsers (chat, live lists) — declare `watch:` on
+  the page and ring the doorbell with `publish/1`; see the push guide.
 
 Events carry the CSRF token automatically (the runtime reads it from
 the document's meta tag) — one more reason interactions must go through

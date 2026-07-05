@@ -42,6 +42,13 @@ defmodule Fractal.Router do
   `handle_event/2` and responds with the HTML fragment (or an
   `fx-redirect` header).
 
+  Server push arrives the other way: `GET /fractal/watch` (opened by the
+  injected runtime on pages that declare `watch:`) is a server-sent-
+  events stream. The router resolves the page from `_fx_path`, runs its
+  guards, subscribes to its resolved topics, streams each `handle_watch/2`
+  fragment as topics fire — and once on connect, which is what makes a
+  reconnect self-healing. The connection holds no application state.
+
   The router also serves `GET /fractal/reload`, the live-reload token
   endpoint polled by the script `Fractal.Document` injects in development.
   """
@@ -157,6 +164,13 @@ defmodule Fractal.Router do
     end
   end
 
+  defp dispatch(%Plug.Conn{method: "GET", path_info: ["fractal", "watch"]} = conn, _opts) do
+    case conn |> fetch_query_params() |> session_pipeline() do
+      {:ok, conn} -> dispatch_watch(conn)
+      {:forbidden, conn} -> event_error(conn, 403, @csrf_message)
+    end
+  end
+
   defp dispatch(%Plug.Conn{method: "GET"} = conn, _opts) do
     # the CSRF plug only seeds the token on GET (it can still reject
     # cross-origin JavaScript requests)
@@ -266,6 +280,195 @@ defmodule Fractal.Router do
 
       nil ->
         event_error(conn, 404, "no page found at #{inspect(path)}")
+    end
+  end
+
+  defp dispatch_watch(conn) do
+    path = conn.query_params["_fx_path"] || ""
+    segments = path |> String.split("/") |> Enum.reject(&(&1 == ""))
+
+    case find_route(:get, segments) do
+      {page, path_params} ->
+        if Page.watches(page) == [] do
+          event_error(conn, 404, "#{inspect(page)} (at #{path}) declares no watch topics")
+        else
+          assigns = watch_assigns(conn, path, path_params)
+
+          case Checkpoint.run(Page.requires(page), assigns) do
+            :ok -> stream_watches(conn, page, assigns)
+            {:redirect, to, _directives} -> sse_redirect(conn, to)
+          end
+        end
+
+      nil ->
+        event_error(conn, 404, "no page found at #{inspect(path)}")
+    end
+  end
+
+  defp watch_assigns(conn, path, path_params) do
+    %{conn: conn, params: path_params, path: path, session: page_session(conn)}
+    |> put_context()
+  end
+
+  defp stream_watches(conn, page, assigns) do
+    # resolved topic ("rooms/42/messages") → declared pattern
+    # ("rooms/:id/messages"), which is what handle_watch clauses match on
+    topics =
+      Map.new(page.watches(), fn declared ->
+        {Fractal.Bus.resolve(declared, assigns.params), declared}
+      end)
+
+    Enum.each(Map.keys(topics), &Fractal.Bus.subscribe/1)
+
+    conn = sse_start(conn)
+
+    # initial catch-up: this connection may be a reconnect that missed
+    # doorbells; handlers re-render from the database, so running each
+    # once makes reconnects self-healing
+    initial =
+      Enum.reduce_while(Map.values(topics), {:ok, conn}, fn declared, {:ok, conn} ->
+        case push_watch(conn, page, declared, assigns) do
+          {:ok, conn} -> {:cont, {:ok, conn}}
+          {:closed, conn} -> {:halt, {:closed, conn}}
+        end
+      end)
+
+    case initial do
+      {:ok, conn} -> watch_loop(conn, page, topics, assigns)
+      {:closed, conn} -> conn
+    end
+  end
+
+  # The delivery pipe: no application state, just a receive loop on the
+  # subscribed topics. Keepalive comments defeat proxy idle timeouts and
+  # bound how long a dead connection lingers after the client is gone.
+  defp watch_loop(conn, page, topics, assigns) do
+    keepalive = Application.get_env(:fractal, :watch_keepalive_ms, 15_000)
+
+    result =
+      receive do
+        {:fractal_watch, resolved} ->
+          case topics do
+            %{^resolved => declared} -> push_watch(conn, page, declared, assigns)
+            _unknown -> {:ok, conn}
+          end
+      after
+        keepalive -> chunk_or_closed(conn, ": keepalive\n\n")
+      end
+
+    case result do
+      {:ok, conn} -> watch_loop(conn, page, topics, assigns)
+      {:closed, conn} -> conn
+    end
+  end
+
+  defp push_watch(conn, page, declared, assigns) do
+    case normalize_watch_result(page, page.handle_watch(declared, assigns)) do
+      {:fragment, content} ->
+        html = content |> HTML.to_safe() |> HTML.safe_to_string()
+        chunk_or_closed(conn, sse_event(html))
+
+      {:redirect, to} ->
+        chunk_or_closed(conn, sse_redirect_event(to))
+    end
+  rescue
+    exception ->
+      # a runtime crash in one push must not kill the stream
+      Logger.error(Exception.format(:error, exception, __STACKTRACE__))
+      {:ok, conn}
+  end
+
+  # watch results are event results minus directives: the stream's
+  # headers are already sent, so the session cannot be written
+  defp normalize_watch_result(page, result) do
+    case normalize_result(page, "handle_watch/2", result) do
+      {kind, payload, []} when kind in [:fragment, :redirect] ->
+        {kind, payload}
+
+      {kind, _payload, directives} when kind in [:fragment, :redirect] ->
+        raise ArgumentError,
+              "#{inspect(page)}.handle_watch/2 returned directives " <>
+                "#{inspect(Keyword.keys(directives))} — watch results cannot write the " <>
+                "session or flash; the push stream's headers are already sent"
+
+      {:render, _payload, _directives} ->
+        raise ArgumentError,
+              "#{inspect(page)}.handle_watch/2 must return {:fragment, content} or " <>
+                "{:redirect, to} — {:render, ...} is for request handlers"
+    end
+  end
+
+  defp sse_start(conn) do
+    conn
+    |> put_resp_content_type("text/event-stream")
+    |> put_resp_header("cache-control", "no-cache")
+    |> send_chunked(200)
+  end
+
+  defp sse_redirect(conn, to) do
+    {_result, conn} = conn |> sse_start() |> chunk_or_closed(sse_redirect_event(to))
+    conn
+  end
+
+  defp sse_redirect_event(to), do: "event: fx-redirect\ndata: #{to}\n\n"
+
+  defp sse_event(html) do
+    data = html |> String.split("\n") |> Enum.map_join("\n", &("data: " <> &1))
+    data <> "\n\n"
+  end
+
+  defp chunk_or_closed(conn, data) do
+    case chunk(conn, data) do
+      {:ok, conn} -> {:ok, conn}
+      {:error, _reason} -> {:closed, conn}
+    end
+  end
+
+  @doc false
+  # Single-shot watch delivery for Fractal.Test.fire_watch/3: the same
+  # resolution → guard → handler path as the SSE stream, responding once
+  # instead of streaming.
+  def fire_watch(conn, topic) do
+    {:ok, conn} = conn |> fetch_query_params() |> session_pipeline()
+    path = current_path(conn)
+
+    case find_route(:get, conn.path_info) do
+      {page, path_params} ->
+        if topic in Page.watches(page) do
+          deliver_watch(conn, page, topic, watch_assigns(conn, path, path_params))
+        else
+          event_error(
+            conn,
+            404,
+            "#{inspect(page)} (at #{path}) does not watch #{inspect(topic)} — " <>
+              "its topics are #{inspect(Page.watches(page))}"
+          )
+        end
+
+      nil ->
+        event_error(conn, 404, "no page found at #{inspect(path)}")
+    end
+  end
+
+  defp deliver_watch(conn, page, topic, assigns) do
+    case Checkpoint.run(Page.requires(page), assigns) do
+      :ok ->
+        case normalize_watch_result(page, page.handle_watch(topic, assigns)) do
+          {:fragment, content} ->
+            conn
+            |> put_resp_content_type("text/html")
+            |> send_resp(200, content |> HTML.to_safe() |> HTML.safe_to_string())
+
+          {:redirect, to} ->
+            conn
+            |> put_resp_header("fx-redirect", to)
+            |> send_resp(204, "")
+        end
+
+      {:redirect, to, _directives} ->
+        conn
+        |> put_resp_header("location", to)
+        |> send_resp(303, "")
     end
   end
 

@@ -35,10 +35,12 @@ defmodule Fractal.Page do
     * `:delete` (optional) — a destroy route handled by `handle_delete/1`.
     * `:events` (optional) — the interactive events this page handles
       with `handle_event/2`. See `Fractal.Interactive`.
+    * `:watch` (optional) — the server-push topics this page handles
+      with `handle_watch/2`. See the "Server push" section below.
     * `:require` (optional) — a guard name (or list of them) that must
       pass before this page renders or handles anything, including
-      events. Guards are defined once, in the app's checkpoint module. See
-      `Fractal.Checkpoint`.
+      events and watch subscriptions. Guards are defined once, in the
+      app's checkpoint module. See `Fractal.Checkpoint`.
 
   ## Styles
 
@@ -176,9 +178,32 @@ defmodule Fractal.Page do
   element) or `{:redirect, to}` (the browser navigates). See
   `Fractal.Interactive` for the full model.
 
+  ## Server push
+
+  Events are the client→server direction; `watch:` is the reverse. A
+  page declares path-shaped topics and handles them with
+  `handle_watch/2`; any code rings the doorbell with `publish/1`:
+
+      use Fractal.Page, path: "/rooms/:id", watch: ["rooms/:id/messages"]
+
+      @impl Fractal.Page
+      def handle_watch("rooms/:id/messages", assigns) do
+        {:fragment, messages_region(assigns.params["id"])}
+      end
+
+  Browsers on the page hold one server-sent-events connection (opened by
+  the injected runtime — no user JavaScript); when the topic fires, the
+  handler re-renders and the fragment replaces the element matching its
+  root `id`. Two rules, both compile-checked: a watched topic's `:name`
+  segments must bind from the page's own path params, and there are no
+  wildcards — publish a broader topic instead. `publish/1` carries no
+  payload; handlers re-query the database, which is why a dropped
+  connection self-heals on reconnect. See the push guide in
+  `mix fractal.ai.docs`.
+
   `use Fractal.Page` imports `Fractal.HTML` and `Fractal.Interactive`,
-  so `tag/3`, `raw/1`, `fx/2`, `trigger/3`, and friends are available
-  directly.
+  so `tag/3`, `raw/1`, `fx/2`, `trigger/3`, `publish/1`, and friends
+  are available directly.
   """
 
   @callback path() :: String.t()
@@ -187,6 +212,7 @@ defmodule Fractal.Page do
   @callback put_path() :: String.t() | nil
   @callback delete_path() :: String.t() | nil
   @callback events() :: [String.t()]
+  @callback watches() :: [String.t()]
   @callback style() :: String.t()
   @callback requires() :: [atom()]
   @callback meta(assigns :: map()) :: map()
@@ -196,18 +222,22 @@ defmodule Fractal.Page do
   @callback handle_delete(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_event(event :: String.t(), assigns :: map()) ::
               {:fragment, Fractal.HTML.Safe.t() | iodata()} | {:redirect, String.t()}
+  @callback handle_watch(topic :: String.t(), assigns :: map()) ::
+              {:fragment, Fractal.HTML.Safe.t() | iodata()} | {:redirect, String.t()}
 
   @optional_callbacks post_path: 0,
                       put_path: 0,
                       delete_path: 0,
                       events: 0,
+                      watches: 0,
                       style: 0,
                       requires: 0,
                       meta: 1,
                       handle_post: 1,
                       handle_put: 1,
                       handle_delete: 1,
-                      handle_event: 2
+                      handle_event: 2,
+                      handle_watch: 2
 
   @actions [:post, :put, :delete]
 
@@ -225,6 +255,7 @@ defmodule Fractal.Page do
       @fractal_page_put Keyword.get(opts, :put)
       @fractal_page_delete Keyword.get(opts, :delete)
       @fractal_page_events Keyword.get(opts, :events, [])
+      @fractal_page_watches Keyword.get(opts, :watch, [])
       @fractal_page_requires opts |> Keyword.get(:require, []) |> List.wrap()
       @before_compile Fractal.Page
     end
@@ -240,6 +271,7 @@ defmodule Fractal.Page do
       end
 
     events = Module.get_attribute(env.module, :fractal_page_events)
+    watches = Module.get_attribute(env.module, :fractal_page_watches)
     requires = Module.get_attribute(env.module, :fractal_page_requires)
 
     validate_path!(env.module, path)
@@ -257,6 +289,7 @@ defmodule Fractal.Page do
     end
 
     validate_events!(env.module, events, Module.defines?(env.module, {:handle_event, 2}))
+    validate_watches!(env.module, path, watches, Module.defines?(env.module, {:handle_watch, 2}))
 
     title = title || default_title(env.module)
 
@@ -265,6 +298,7 @@ defmodule Fractal.Page do
             title: title,
             actions: actions,
             events: events,
+            watches: watches,
             requires: requires
           ] do
       @impl Fractal.Page
@@ -275,6 +309,9 @@ defmodule Fractal.Page do
 
       @impl Fractal.Page
       def events, do: unquote(events)
+
+      @impl Fractal.Page
+      def watches, do: unquote(watches)
 
       @impl Fractal.Page
       def requires, do: unquote(requires)
@@ -372,6 +409,62 @@ defmodule Fractal.Page do
   end
 
   @doc false
+  def validate_watches!(module, path, watches, defines_handler?) do
+    path_params = if route?(path), do: params(path), else: []
+
+    cond do
+      not valid_watches?(watches) ->
+        raise ArgumentError,
+              "#{inspect(module)} has invalid watch topics #{inspect(watches)} — " <>
+                "watch: must be a list of unique, path-shaped topics like " <>
+                "\"rooms/:id/messages\" (no leading slash, no wildcards)"
+
+      watches != [] and not defines_handler? ->
+        raise ArgumentError,
+              "#{inspect(module)} declares watch: #{inspect(watches)} but does not " <>
+                "define handle_watch/2"
+
+      watches == [] and defines_handler? ->
+        raise ArgumentError,
+              "#{inspect(module)} defines handle_watch/2 but does not declare its " <>
+                "topics: use Fractal.Page, path: ..., watch: [\"example/topic\"]"
+
+      unbound_topic_params(watches, path_params) != [] ->
+        unbound = unbound_topic_params(watches, path_params)
+
+        raise ArgumentError,
+              "#{inspect(module)} watches topics with params #{inspect(unbound)} that its " <>
+                "path #{inspect(path)} does not bind — a watched topic's :name segments " <>
+                "must all come from the page's own path params"
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc "Returns `true` if `watches` is a valid watch declaration."
+  @spec valid_watches?(term()) :: boolean()
+  def valid_watches?(watches) do
+    is_list(watches) and
+      Enum.all?(watches, &Fractal.Bus.valid_topic?/1) and
+      Enum.uniq(watches) == watches
+  end
+
+  @doc "Returns the watch topics `module` declares (works for any page)."
+  @spec watches(module()) :: [String.t()]
+  def watches(module) do
+    if function_exported?(module, :watches, 0), do: module.watches(), else: []
+  end
+
+  defp unbound_topic_params(watches, path_params) do
+    watches
+    |> Enum.filter(&Fractal.Bus.valid_topic?/1)
+    |> Enum.flat_map(&Fractal.Bus.topic_params/1)
+    |> Enum.uniq()
+    |> Kernel.--(path_params)
+  end
+
+  @doc false
   def validate_requires!(module, requires) do
     valid? =
       is_list(requires) and
@@ -442,6 +535,12 @@ defmodule Fractal.Page do
   @spec param_count(String.t()) :: non_neg_integer()
   def param_count(pattern) do
     Enum.count(segments(pattern), &String.starts_with?(&1, ":"))
+  end
+
+  @doc "The names of the dynamic (`:name`) segments in a route pattern."
+  @spec params(String.t()) :: [String.t()]
+  def params(pattern) do
+    for ":" <> name <- segments(pattern), do: name
   end
 
   @doc "The actions a page can declare besides GET: `#{inspect(@actions)}`."

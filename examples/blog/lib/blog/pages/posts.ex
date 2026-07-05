@@ -1,7 +1,13 @@
 defmodule Blog.Pages.Posts do
-  @moduledoc "Lists all posts, served at /posts."
+  @moduledoc """
+  Lists all posts, served at /posts.
 
-  use Fractal.Page, path: "/posts", title: "Posts"
+  The list is live: it watches the "posts" topic, so a post created in
+  another browser appears here without a reload (the new-post page rings
+  the doorbell with `publish("posts")`).
+  """
+
+  use Fractal.Page, path: "/posts", title: "Posts", watch: ["posts"]
 
   import Ecto.Query, only: [order_by: 2]
 
@@ -9,12 +15,21 @@ defmodule Blog.Pages.Posts do
 
   @impl Fractal.Page
   def render(_assigns) do
-    posts = Repo.all(order_by(Blog.Post, desc: :id))
-
     tag(:section, [], [
       tag(:h1, [], ["Posts"]),
-      render_list(posts),
+      posts_region(),
       tag(:p, [], [tag(:a, [href: "/posts/new"], ["New post"])])
+    ])
+  end
+
+  @impl Fractal.Page
+  def handle_watch("posts", _assigns) do
+    {:fragment, posts_region()}
+  end
+
+  defp posts_region do
+    tag(:div, [id: "posts"], [
+      Blog.Post |> order_by(desc: :id) |> Repo.all() |> render_list()
     ])
   end
 

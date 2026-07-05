@@ -173,19 +173,64 @@ defmodule Fractal.Fixtures do
     end
   end
 
+  defmodule WatchPage do
+    @moduledoc false
+    use Fractal.Page,
+      path: "/fixtures/watch/:room",
+      title: "Watch",
+      events: ["tick"],
+      watch: ["fixtures/rooms/:room/ticks", "fixtures/ticks"]
+
+    @impl Fractal.Page
+    def render(assigns) do
+      tag(:section, [], [
+        tag(:h1, [], ["Watch"]),
+        region(assigns.params["room"]),
+        trigger("Tick", "tick", target: "#ticks")
+      ])
+    end
+
+    @impl Fractal.Page
+    def handle_event("tick", assigns) do
+      publish("fixtures/rooms/#{assigns.params["room"]}/ticks")
+      publish("fixtures/ticks")
+      {:fragment, region(assigns.params["room"])}
+    end
+
+    @impl Fractal.Page
+    def handle_watch("fixtures/rooms/:room/ticks", assigns) do
+      {:fragment, region(assigns.params["room"])}
+    end
+
+    def handle_watch("fixtures/ticks", _assigns) do
+      {:fragment, tag(:p, [id: "all-ticks"], ["something ticked somewhere"])}
+    end
+
+    defp region(room) do
+      tag(:p, [id: "ticks"], ["tick in ", to_string(room)])
+    end
+  end
+
   defmodule GuardedPage do
     @moduledoc false
     use Fractal.Page,
       path: "/fixtures/admin",
       title: "Fixture admin",
-      require: :fixture_signed_in
+      require: :fixture_signed_in,
+      watch: ["fixtures/ticks"]
 
     @impl Fractal.Page
     def render(assigns) do
       tag(:section, [], [
         tag(:h1, [], ["Fixture admin"]),
-        tag(:p, [], ["Hello, ", assigns.context["fixture_user"] || "stranger"])
+        tag(:p, [], ["Hello, ", assigns.context["fixture_user"] || "stranger"]),
+        tag(:p, [id: "admin-ticks"], ["no ticks observed"])
       ])
+    end
+
+    @impl Fractal.Page
+    def handle_watch("fixtures/ticks", _assigns) do
+      {:fragment, tag(:p, [id: "admin-ticks"], ["a tick was observed"])}
     end
   end
 

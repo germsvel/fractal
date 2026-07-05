@@ -9,7 +9,7 @@ working **in** a Fractal app get their own `AGENTS.md` from
 
 | Path | What |
 | --- | --- |
-| `lib/fractal/` | The framework: page/router/document/verify/checkpoint/invariant/layout/component/assets/test |
+| `lib/fractal/` | The framework: page/router/document/verify/checkpoint/invariant/layout/component/assets/bus/test |
 | `lib/mix/tasks/` | `fractal.server`, `fractal.verify`, `fractal.ai.docs`, the `fractal.gen.*` generators |
 | `priv/guides/` | The guides `mix fractal.ai.docs` ships into every app — update them with behavior changes |
 | `test/` | Framework tests, mirroring `lib/`; DB-less and Postgres-free |
@@ -52,7 +52,7 @@ the feature exists.
 - Framework tests must not need a database or the sample app. They run
   against `test/support/fixtures.ex` — a tiny host app (pages under
   `/fixtures`, `Fractal.Fixtures.Checkpoint`, `.Invariants`, `.Layout`,
-  `.Note`). The checkpoint/invariants/layout fixtures are the *only*
+  `.Note`, and the watch fixtures). The checkpoint/invariants/layout fixtures are the *only*
   discovered instances — those modules are one-per-app, so don't add
   rivals; extend the existing fixtures.
 - `mix test` runs the suite (integration excluded);

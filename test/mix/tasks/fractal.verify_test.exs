@@ -20,6 +20,13 @@ defmodule Mix.Tasks.Fractal.VerifyTest do
     assert Enum.any?(messages, &(&1 =~ "✓ POST routes are unique"))
     assert Enum.any?(messages, &(&1 =~ "Fractal.Fixtures.StaticPage renders"))
     assert Enum.any?(messages, &(&1 =~ "✓ invariants are well-formed"))
+    assert Enum.any?(messages, &(&1 =~ "✓ topic 'fixtures/ticks' has a publisher"))
+
+    assert Enum.any?(
+             messages,
+             &(&1 =~ "✓ Fractal.Fixtures.WatchPage handles watch 'fixtures/rooms/:room/ticks'")
+           )
+
     assert Enum.any?(messages, &(&1 =~ "✓ the layout is well-formed"))
     assert Enum.any?(messages, &(&1 =~ "✓ Fractal.Fixtures.Layout renders its chrome"))
 

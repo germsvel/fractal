@@ -61,6 +61,28 @@ defmodule Fractal.Test do
     request(:post, "/fractal/event", params, opts)
   end
 
+  @doc """
+  Delivers a watch topic to the page serving `path`, exactly as a
+  `publish/1` would over the push stream — resolve the page, run its
+  guards, run `handle_watch/2` — and returns the response: 200 with the
+  fragment, 204 with an `fx-redirect` header, or 303 when a guard
+  denies.
+
+      conn = fire_watch("/rooms/42", "rooms/:id/messages")
+      assert conn.resp_body =~ "the new message"
+
+  Pass the topic as the page declares it (the pattern, not a resolved
+  instance).
+  """
+  @spec fire_watch(String.t(), String.t(), keyword()) :: Plug.Conn.t()
+  def fire_watch(path, topic, opts \\ []) do
+    :get
+    |> conn(path, %{})
+    |> init_test_session(opts[:session] || %{})
+    |> Plug.Conn.put_private(:plug_skip_csrf_protection, true)
+    |> Router.fire_watch(topic)
+  end
+
   defp request(method, path, params, opts) do
     method
     |> conn(path, params)

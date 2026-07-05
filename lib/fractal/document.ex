@@ -195,7 +195,13 @@ defmodule Fractal.Document do
   end
 
   defp page_attr(nil), do: ""
-  defp page_attr(page), do: [" data-page=\"", Page.slug(page), "\""]
+
+  defp page_attr(page) do
+    # data-fx-watch is the runtime's on-switch: only pages that declare
+    # watch: open a server-push connection
+    watch_attr = if Page.watches(page) == [], do: "", else: " data-fx-watch"
+    [" data-page=\"", Page.slug(page), "\"", watch_attr]
+  end
 
   defp flash_banners(flash) when flash in [nil, %{}], do: ""
 

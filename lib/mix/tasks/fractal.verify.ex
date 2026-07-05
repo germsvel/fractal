@@ -33,6 +33,7 @@ defmodule Mix.Tasks.Fractal.Verify do
       ] ++
         Fractal.Verify.layout() ++
         Fractal.Verify.run() ++
+        Fractal.Verify.topics() ++
         Fractal.Verify.run_components() ++
         Fractal.Verify.run_invariants() ++
         Fractal.Verify.test_coverage()
@@ -73,6 +74,17 @@ defmodule Mix.Tasks.Fractal.Verify do
         Mix.shell().info(
           "\nℹ guards no page requires (not a failure): " <>
             Enum.map_join(unused, ", ", &inspect/1)
+        )
+    end
+
+    case Fractal.Verify.unwatched_topics() do
+      [] ->
+        :ok
+
+      unwatched ->
+        Mix.shell().info(
+          "\nℹ published topics no page watches (not a failure): " <>
+            Enum.join(unwatched, ", ")
         )
     end
 

@@ -31,6 +31,7 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
 
     print_component_inventory()
     print_guard_inventory()
+    print_topic_inventory()
     print_invariant_inventory()
   end
 
@@ -39,6 +40,24 @@ defmodule Mix.Tasks.Fractal.Ai.Docs do
     case :code.priv_dir(:fractal) do
       {:error, _reason} -> "priv/guides"
       dir -> Path.join(List.to_string(dir), "guides")
+    end
+  end
+
+  defp print_topic_inventory do
+    Mix.shell().info("\n<!-- watch topic inventory (live — the app's server-push wiring) -->\n")
+
+    entries =
+      for page <- Fractal.Router.pages(),
+          topic <- Fractal.Page.watches(page) do
+        "- #{topic} — watched by #{inspect(page)} (#{page.path()})"
+      end
+
+    case entries do
+      [] ->
+        Mix.shell().info("No watch topics declared yet (see the push guide).")
+
+      entries ->
+        Enum.each(entries, fn entry -> Mix.shell().info(entry) end)
     end
   end
 

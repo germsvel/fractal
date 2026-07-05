@@ -44,6 +44,22 @@ defmodule Fractal.DocumentTest do
   test "always includes the interactivity runtime" do
     assert Document.shell("t", "b") =~ "/fractal/event"
     assert Document.shell("t", "b") =~ "data-fx-event"
+    # the push half is part of the same runtime; it only activates on
+    # pages that carry the data-fx-watch on-switch
+    assert Document.shell("t", "b") =~ "/fractal/watch"
+    assert Document.shell("t", "b") =~ "EventSource"
+  end
+
+  test "only pages that declare watch: carry the data-fx-watch on-switch" do
+    assigns = %{params: %{"room" => "1"}, session: %{}, context: %{}, path: "/", conn: nil}
+
+    assert Document.render(Fractal.Fixtures.WatchPage, assigns) =~
+             ~s(<main data-page="watch-page" data-fx-watch>)
+
+    # (the runtime JS mentions the attribute name; the <main> tag is
+    # what decides whether a connection opens)
+    assert Document.render(Fractal.Fixtures.StaticPage, %{assigns | params: %{}}) =~
+             ~s(<main data-page="static-page">)
   end
 
   test "always includes the CSRF token meta tag" do

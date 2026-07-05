@@ -13,7 +13,8 @@ defmodule Fractal.RouterTest do
     FormPage,
     GuardedPage,
     ShowPage,
-    StaticPage
+    StaticPage,
+    WatchPage
   }
 
   alias Fractal.Router
@@ -34,6 +35,7 @@ defmodule Fractal.RouterTest do
     assert EditPage in pages
     assert EventPage in pages
     assert GuardedPage in pages
+    assert WatchPage in pages
   end
 
   test "a guarded page denies without its context and renders with it" do
@@ -214,6 +216,63 @@ defmodule Fractal.RouterTest do
 
       assert [set_cookie | _] = Plug.Conn.get_resp_header(get_conn, "set-cookie")
       assert set_cookie =~ "SameSite=Lax"
+    end
+  end
+
+  describe "server push" do
+    test "fire_watch delivers a topic to the page's handle_watch/2" do
+      conn = fire_watch("/fixtures/watch/lobby", "fixtures/rooms/:room/ticks")
+
+      assert conn.status == 200
+      assert {"content-type", "text/html; charset=utf-8"} in conn.resp_headers
+      assert conn.resp_body =~ ~s(id="ticks")
+      assert conn.resp_body =~ "tick in lobby"
+      refute conn.resp_body =~ "<html", "pushed fragments are not wrapped in the document"
+    end
+
+    test "two pages watching the same topic each render their own fragment" do
+      broad = fire_watch("/fixtures/watch/lobby", "fixtures/ticks")
+      admin = fire_watch("/fixtures/admin", "fixtures/ticks", session: %{"fixture_user" => "Ada"})
+
+      assert broad.resp_body =~ "something ticked somewhere"
+      assert admin.resp_body =~ "a tick was observed"
+    end
+
+    test "fire_watch rejects topics the page does not watch, naming the declared ones" do
+      conn = fire_watch("/fixtures/watch/lobby", "fixtures/ghosts")
+
+      assert conn.status == 404
+      assert conn.resp_body =~ ~s("fixtures/ghosts")
+      assert conn.resp_body =~ "fixtures/rooms/:room/ticks"
+    end
+
+    test "fire_watch rejects paths with no page" do
+      assert fire_watch("/nowhere", "fixtures/ticks").status == 404
+    end
+
+    test "a guarded page denies watch delivery without its context" do
+      denied = fire_watch("/fixtures/admin", "fixtures/ticks")
+
+      assert denied.status == 303
+      assert Plug.Conn.get_resp_header(denied, "location") == ["/fixtures"]
+    end
+
+    test "the watch endpoint rejects pages without watches and unknown paths" do
+      no_watches = get("/fractal/watch", %{"_fx_path" => "/fixtures"})
+
+      assert no_watches.status == 404
+      assert no_watches.resp_body =~ "declares no watch topics"
+
+      assert get("/fractal/watch", %{"_fx_path" => "/nowhere"}).status == 404
+    end
+
+    test "the watch endpoint answers a denied guard with an fx-redirect event" do
+      conn = get("/fractal/watch", %{"_fx_path" => "/fixtures/admin"})
+
+      assert conn.status == 200
+      assert {"content-type", "text/event-stream; charset=utf-8"} in conn.resp_headers
+      assert conn.resp_body =~ "event: fx-redirect"
+      assert conn.resp_body =~ "data: /fixtures"
     end
   end
 
