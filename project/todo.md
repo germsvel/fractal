@@ -6,9 +6,6 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Push from the server? in task 13
-  - PubSub vs SSE
-  - [ ] Build a chat app
 - [ ] Third party JS libs?
 - [ ] Prompting from the page itself? (can we embed)
   - Nice expecially for UI changes -- a la tidewave
@@ -32,3 +29,5 @@ Done
 - [x] Separate framework from sample app task 10
 - [x] Add meta data in HTML in task 11
 - [x] Add installer task 12
+- [x] Push from the server? in task 13
+  - [x] Build a chat app
