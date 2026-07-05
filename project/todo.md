@@ -6,15 +6,14 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Separate framework from sample app task 10
-- [ ] Add meta data in HTML in task 11
-- [ ] Add installer task 12
+- [ ] Push from the server? in task 13
+  - PubSub vs SSE
+  - [ ] Build a chat app
+- [ ] Third party JS libs?
+- [ ] Prompting from the page itself? (can we embed)
+  - Nice expecially for UI changes -- a la tidewave
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
-- [ ] Prompting from the page itself? (can we embed)
-- [ ] Push from the server?
-  - [ ] PubSub?
-  - [ ] Build a chat app
 - [ ] Better test helpers
 
 Done
@@ -30,3 +29,6 @@ Done
 - [x] Middleware (or not middleware) in /task8.md
 - [x] Should each page have a verify? function that verifies itself? (thinking
   of extensions) -- Going with Invariants in /task9.md
+- [x] Separate framework from sample app task 10
+- [x] Add meta data in HTML in task 11
+- [x] Add installer task 12
