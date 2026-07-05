@@ -2,12 +2,17 @@
 
 A Fractal page is **one module** that declares its route and renders its
 content. There is no router file to edit, no controller, no template file:
-drop a module in `lib/fractal/pages/` and it is served.
+drop a module in `lib/my_app/pages/` and it is served.
+
+Throughout the guides, `MyApp`/`my_app` stands for your app's own
+namespace and name — an app generated as `blog` uses `Blog.Pages.*` in
+`lib/blog/pages/`. Fractal derives this from the app itself; never use
+`Fractal.*` for app modules.
 
 ## Anatomy of a page
 
 ```elixir
-defmodule Fractal.Pages.About do
+defmodule MyApp.Pages.About do
   @moduledoc "The About page, served at /about."
 
   use Fractal.Page, path: "/about", title: "About"
@@ -24,7 +29,7 @@ end
 
 Rules:
 
-- Module name: `Fractal.Pages.<Name>`; file: `lib/fractal/pages/<name>.ex`
+- Module name: `MyApp.Pages.<Name>`; file: `lib/my_app/pages/<name>.ex`
   (snake_case of the module suffix).
 - `use Fractal.Page` takes `path:` (required, string starting with `/`,
   validated at compile time) and `title:` (optional).
@@ -74,8 +79,8 @@ For a static page:
 mix fractal.gen.page Pricing --path /pricing --title "Pricing"
 ```
 
-creates `lib/fractal/pages/pricing.ex` and
-`test/fractal/pages/pricing_test.exs`. Then edit `render/1` and keep the
+creates `lib/my_app/pages/pricing.ex` and
+`test/my_app/pages/pricing_test.exs`. Then edit `render/1` and keep the
 test meaningful: assert on the real content you added.
 
 For a database-backed resource with a form (schema, migration, pages,

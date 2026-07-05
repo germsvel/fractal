@@ -31,16 +31,16 @@ A page declares its form's POST route with the `:post` option and
 handles it with `handle_post/1` — same module, one file:
 
 ```elixir
-defmodule Fractal.Pages.NewPost do
+defmodule MyApp.Pages.NewPost do
   use Fractal.Page, path: "/posts/new", title: "New post", post: "/posts"
 
   import Fractal.Form
 
-  alias Fractal.Repo
+  alias MyApp.Repo
 
   @impl Fractal.Page
   def render(assigns) do
-    changeset = assigns[:changeset] || Fractal.Post.changeset(%Fractal.Post{}, %{})
+    changeset = assigns[:changeset] || MyApp.Post.changeset(%MyApp.Post{}, %{})
 
     tag(:section, [], [
       tag(:h1, [], ["New post"]),
@@ -54,7 +54,7 @@ defmodule Fractal.Pages.NewPost do
 
   @impl Fractal.Page
   def handle_post(assigns) do
-    case Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, assigns.params)) do
+    case Repo.insert(MyApp.Post.changeset(%MyApp.Post{}, assigns.params)) do
       {:ok, post} -> {:redirect, "/posts/#{post.id}"}
       {:error, changeset} -> {:render, %{changeset: changeset}}
     end
@@ -80,7 +80,7 @@ Updates and deletes follow the exact same shape: the edit page declares
 `put:` and `delete:` routes and handles both in the same file:
 
 ```elixir
-defmodule Fractal.Pages.EditPost do
+defmodule MyApp.Pages.EditPost do
   use Fractal.Page,
     path: "/posts/:id/edit",
     title: "Edit post",
@@ -89,12 +89,12 @@ defmodule Fractal.Pages.EditPost do
 
   import Fractal.Form
 
-  alias Fractal.Repo
+  alias MyApp.Repo
 
   @impl Fractal.Page
   def render(assigns) do
-    post = Repo.get(Fractal.Post, assigns.params["id"])
-    changeset = assigns[:changeset] || Fractal.Post.changeset(post, %{})
+    post = Repo.get(MyApp.Post, assigns.params["id"])
+    changeset = assigns[:changeset] || MyApp.Post.changeset(post, %{})
 
     tag(:section, [], [
       form_for(changeset, "/posts/#{post.id}", [method: :put], [
@@ -107,9 +107,9 @@ defmodule Fractal.Pages.EditPost do
 
   @impl Fractal.Page
   def handle_put(assigns) do
-    post = Repo.get(Fractal.Post, assigns.params["id"])
+    post = Repo.get(MyApp.Post, assigns.params["id"])
 
-    case Repo.update(Fractal.Post.changeset(post, assigns.params)) do
+    case Repo.update(MyApp.Post.changeset(post, assigns.params)) do
       {:ok, post} -> {:redirect, "/posts/#{post.id}"}
       {:error, changeset} -> {:render, %{changeset: changeset}}
     end
@@ -117,7 +117,7 @@ defmodule Fractal.Pages.EditPost do
 
   @impl Fractal.Page
   def handle_delete(assigns) do
-    assigns.params["id"] |> then(&Repo.get(Fractal.Post, &1)) |> Repo.delete!()
+    assigns.params["id"] |> then(&Repo.get(MyApp.Post, &1)) |> Repo.delete!()
     {:redirect, "/posts"}
   end
 end
@@ -166,13 +166,13 @@ invalid (verification renders every page with empty params), e.g. a
 
 ## Testing data-backed pages
 
-Use the `Fractal.DataCase` template — each test gets a sandboxed,
+Use the `MyApp.DataCase` template — each test gets a sandboxed,
 rolled-back DB connection and can run `async: true` — and drive pages
 through the router with the `Fractal.Test` helpers:
 
 ```elixir
-defmodule Fractal.Pages.PostsTest do
-  use Fractal.DataCase, async: true
+defmodule MyApp.Pages.PostsTest do
+  use MyApp.DataCase, async: true
 
   import Fractal.Test
 

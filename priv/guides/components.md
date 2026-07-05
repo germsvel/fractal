@@ -18,11 +18,11 @@ near-duplicate. `mix fractal.verify` lists components no page renders.
 
 ## Anatomy
 
-One file per component in `lib/fractal/components/` — the page pattern
+One file per component in `lib/my_app/components/` — the page pattern
 at smaller scale (render + scoped style + example, no routes):
 
 ```elixir
-defmodule Fractal.Components.Card do
+defmodule MyApp.Components.Card do
   @moduledoc "A surface for grouping related content."
 
   use Fractal.Component
@@ -52,7 +52,7 @@ end
 Pages render it with the imported `component/2` helper:
 
 ```elixir
-component(Fractal.Components.Card, title: "Stats", body: chart)
+component(MyApp.Components.Card, title: "Stats", body: chart)
 ```
 
 - **Assigns are the whole API.** "Slots" are just assign keys carrying
@@ -89,7 +89,7 @@ Scaffold one with `mix fractal.gen.component Name`.
 import Fractal.Component, only: [component: 2]
 
 test "passes Fractal's component verification checks" do
-  results = Fractal.Verify.run_components([Fractal.Components.Card])
+  results = Fractal.Verify.run_components([MyApp.Components.Card])
   assert Fractal.Verify.ok?(results), inspect(Fractal.Verify.errors(results))
 end
 

@@ -22,10 +22,10 @@ use Fractal.Page, path: "/admin", title: "Admin", require: :signed_in
 events dispatch to a page, so they cannot bypass its guards.
 
 Guard names are defined in exactly one module — the checkpoint,
-`lib/fractal/checkpoints.ex`:
+`lib/my_app/checkpoints.ex`:
 
 ```elixir
-defmodule Fractal.Checkpoints do
+defmodule MyApp.Checkpoints do
   use Fractal.Checkpoint
 
   def context(assigns) do
@@ -76,7 +76,7 @@ page still shows its own behavior; the guarantee is mechanical.
 Override `context/1` to compute identity-scale data once per request —
 the current user, a locale. It lands under `assigns.context` for every
 page and guard. Because it's namespaced, provenance is self-evident:
-anything on `context.*` came from `lib/fractal/checkpoints.ex`, nowhere
+anything on `context.*` came from `lib/my_app/checkpoints.ex`, nowhere
 else.
 
 Rules: pure derivation from session/params/path (a `Repo.get` for the

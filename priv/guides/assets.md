@@ -10,7 +10,7 @@ A page optionally implements `style/0`, returning plain CSS for that
 page only:
 
 ```elixir
-defmodule Fractal.Pages.Pricing do
+defmodule MyApp.Pages.Pricing do
   use Fractal.Page, path: "/pricing", title: "Pricing"
 
   @impl Fractal.Page
@@ -83,7 +83,7 @@ pages never ship their own scripts. Two rules verification enforces:
 
 ```elixir
 test "declares its scoped styles" do
-  assert Fractal.Pages.Pricing.style() =~ ".plans"
+  assert MyApp.Pages.Pricing.style() =~ ".plans"
 end
 ```
 

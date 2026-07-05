@@ -14,7 +14,7 @@ database. There is no session store to manage.
 def render(assigns) do
   case assigns.session["user_id"] do
     nil -> guest_view()
-    id  -> member_view(Fractal.Repo.get(Fractal.User, id))
+    id  -> member_view(MyApp.Repo.get(MyApp.User, id))
   end
 end
 ```
@@ -42,7 +42,7 @@ Three directives, composable with every return type:
 - `flash:` — a map of level → message (`"info"` and `"error"` are
   styled) shown by the document **once**, on the next page load
 
-`grep -r "session:" lib/fractal/pages` finds every place session state
+`grep -r "session:" lib/my_app/pages` finds every place session state
 changes.
 
 ### What belongs in the session

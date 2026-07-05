@@ -16,7 +16,7 @@ framework, which also makes interactivity fully testable in ExUnit.
 ## An interactive page
 
 ```elixir
-defmodule Fractal.Pages.Counter do
+defmodule MyApp.Pages.Counter do
   use Fractal.Page, path: "/counter", title: "Counter", events: ["increment", "reset"]
 
   @impl Fractal.Page

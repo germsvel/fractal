@@ -39,7 +39,7 @@ to compile a page with a missing or malformed `path:`.
 
 ## Testing conventions
 
-- Every page has a test file at `test/fractal/pages/<name>_test.exs`.
+- Every page has a test file at `test/my_app/pages/<name>_test.exs`.
 - Page tests assert three things: the page passes `Fractal.Verify.run/1`,
   declares the expected route, and its rendered HTML contains the real
   content (not just the scaffold placeholder).
@@ -51,11 +51,11 @@ to compile a page with a missing or malformed `path:`.
 ## Invariants: the app's additions to the contract
 
 An **invariant** is a property that must be guaranteed for every page —
-current and future. They are defined once, in `lib/fractal/invariants.ex`,
+current and future. They are defined once, in `lib/my_app/invariants.ex`,
 and `mix fractal.verify` runs them against all pages uniformly:
 
 ```elixir
-defmodule Fractal.Invariants do
+defmodule MyApp.Invariants do
   use Fractal.Invariant
 
   invariant "title fits in a search result", %{page: page} do
