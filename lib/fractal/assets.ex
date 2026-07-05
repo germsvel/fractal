@@ -122,6 +122,15 @@ defmodule Fractal.Assets do
         {:error, _reason} -> ""
       end
 
+    layout_styles =
+      case Fractal.Layout.style() do
+        style when is_binary(style) and style != "" ->
+          [["\n[data-layout] {\n", style, "\n}\n"]]
+
+        _none ->
+          []
+      end
+
     # components before pages, so page styles win ties in the cascade
     component_styles =
       for component <- Fractal.Component.all(),
@@ -137,7 +146,7 @@ defmodule Fractal.Assets do
         ["\n[data-page=\"", Page.slug(page), "\"] {\n", style, "\n}\n"]
       end
 
-    css = IO.iodata_to_binary([app | component_styles ++ page_styles])
+    css = IO.iodata_to_binary([app | layout_styles ++ component_styles ++ page_styles])
     {short_hash(css), css}
   end
 

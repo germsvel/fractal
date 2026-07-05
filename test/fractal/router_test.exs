@@ -1,14 +1,13 @@
 defmodule Fractal.RouterTest do
-  # DataCase: the method-dispatch tests exercise the database-backed
-  # posts pages
-  use Fractal.DataCase, async: true
+  # framework routing tests run against the DB-less fixture pages in
+  # test/support/fixtures.ex — no sample-app content, no DataCase
+  use ExUnit.Case, async: true
 
   import Fractal.Test
   import Plug.Test, only: [conn: 3]
 
+  alias Fractal.Fixtures.{EchoPage, EditPage, EventPage, FormPage, ShowPage, StaticPage}
   alias Fractal.Router
-
-  @post_params %{"title" => "A title", "author" => "An author", "body" => "A body"}
 
   # a request built without the Fractal.Test helpers: no test session,
   # no CSRF exemption — what a real (or forged) client sends
@@ -16,23 +15,26 @@ defmodule Fractal.RouterTest do
     method |> conn(path, params) |> Router.call([])
   end
 
-  defp insert_post! do
-    {:ok, post} = Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @post_params))
-    post
+  test "discovers pages, including the fixtures" do
+    pages = Router.pages()
+
+    assert StaticPage in pages
+    assert EchoPage in pages
+    assert ShowPage in pages
+    assert FormPage in pages
+    assert EditPage in pages
+    assert EventPage in pages
   end
 
-  test "discovers the home page" do
-    assert Fractal.Pages.Home in Router.pages()
-  end
-
-  test "GET / renders the home page inside the layout" do
-    conn = get("/")
+  test "GET renders a page inside the document" do
+    conn = get("/fixtures")
 
     assert conn.status == 200
     assert {"content-type", "text/html; charset=utf-8"} in conn.resp_headers
     assert conn.resp_body =~ "<!DOCTYPE html>"
-    assert conn.resp_body =~ "<title>Fractal</title>"
-    assert conn.resp_body =~ "AI-first web framework"
+    assert conn.resp_body =~ "<title>Fixtures"
+    assert conn.resp_body =~ "The framework&#39;s own test pages."
+    assert conn.resp_body =~ ~s(<main data-page="static-page">)
   end
 
   test "POST on an unknown path renders a 404" do
@@ -47,111 +49,126 @@ defmodule Fractal.RouterTest do
     assert conn.status == 404
   end
 
-  test "dynamic segments bind params" do
-    post = insert_post!()
-
-    conn = get("/posts/#{post.id}")
+  test "dynamic segments bind params, static segments win" do
+    conn = get("/fixtures/42")
 
     assert conn.status == 200
-    assert conn.resp_body =~ "A title"
+    assert conn.resp_body =~ "Fixture 42"
+
+    # /fixtures/new is a static route that also matches /fixtures/:id
+    assert get("/fixtures/new").resp_body =~ "New fixture"
+  end
+
+  test "POST dispatches to the page's post route" do
+    conn = post("/fixtures", %{"name" => "alpha"})
+
+    assert conn.status == 303
+    assert Plug.Conn.get_resp_header(conn, "location") == ["/fixtures/alpha"]
+
+    invalid = post("/fixtures", %{"name" => "  "})
+
+    assert invalid.status == 200
+    assert invalid.resp_body =~ "name is required"
+  end
+
+  test "framework plumbing params never reach pages" do
+    posted = post("/fixtures/echo", %{"name" => "ada", "_csrf_token" => "tok"})
+
+    assert posted.resp_body =~ ~s(&quot;name&quot; =&gt; &quot;ada&quot;)
+    refute posted.resp_body =~ "&quot;_csrf_token&quot;"
+    refute posted.resp_body =~ "&quot;_method&quot;"
+
+    fired = fire_event("/fixtures/echo", "echo", %{"n" => "1"})
+
+    assert fired.resp_body =~ ~s(&quot;n&quot; =&gt; &quot;1&quot;)
+    refute fired.resp_body =~ "&quot;_fx_event&quot;"
+    refute fired.resp_body =~ "&quot;_csrf_token&quot;"
   end
 
   test "native PUT and PATCH dispatch to the page's put route" do
-    post = insert_post!()
+    put_conn = put("/fixtures/7", %{"name" => "via PUT"})
 
-    put_conn =
-      put("/posts/#{post.id}", %{"title" => "via PUT"})
+    assert put_conn.status == 200
+    assert put_conn.resp_body =~ "updated to via PUT (7)"
 
-    assert put_conn.status == 303
-    assert Repo.get!(Fractal.Post, post.id).title == "via PUT"
+    patch_conn = patch("/fixtures/7", %{"name" => "via PATCH"})
 
-    patch_conn = patch("/posts/#{post.id}", %{"title" => "via PATCH"})
-
-    assert patch_conn.status == 303
-    assert Repo.get!(Fractal.Post, post.id).title == "via PATCH"
+    assert patch_conn.status == 200
+    assert patch_conn.resp_body =~ "updated to via PATCH (7)"
   end
 
   test "a POST with a hidden _method field is rewritten before dispatch" do
-    post = insert_post!()
+    conn = post("/fixtures/7", %{"_method" => "put", "name" => "via override"})
 
-    conn = post("/posts/#{post.id}", %{"_method" => "put", "title" => "via override"})
+    assert conn.status == 200
+    assert conn.resp_body =~ "updated to via override (7)"
 
-    assert conn.status == 303
-    assert Repo.get!(Fractal.Post, post.id).title == "via override"
-
-    delete_conn = post("/posts/#{post.id}", %{"_method" => "delete"})
+    delete_conn = post("/fixtures/7", %{"_method" => "delete"})
 
     assert delete_conn.status == 303
-    assert Repo.get(Fractal.Post, post.id) == nil
+    assert Plug.Conn.get_resp_header(delete_conn, "location") == ["/fixtures?deleted=7"]
+  end
+
+  test "native DELETE dispatches to the page's delete route" do
+    conn = delete("/fixtures/9")
+
+    assert conn.status == 303
+    assert Plug.Conn.get_resp_header(conn, "location") == ["/fixtures?deleted=9"]
   end
 
   describe "POST /fractal/event" do
     test "dispatches to the page's handle_event/2 and returns the fragment" do
-      conn = fire_event("/counter", "increment", %{"count" => "1"})
+      conn = fire_event("/fixtures/ping", "ping", %{"n" => "41"})
 
       assert conn.status == 200
       assert {"content-type", "text/html; charset=utf-8"} in conn.resp_headers
-      assert conn.resp_body =~ "Count: </strong>2"
+      assert conn.resp_body =~ "pong 42"
       refute conn.resp_body =~ "<html"
     end
 
     test "supports {:redirect, to} via the fx-redirect header" do
-      conn = fire_event("/counter", "reset")
+      conn = fire_event("/fixtures/ping", "reset")
 
       assert conn.status == 204
-      assert Plug.Conn.get_resp_header(conn, "fx-redirect") == ["/counter"]
+      assert Plug.Conn.get_resp_header(conn, "fx-redirect") == ["/fixtures/ping"]
     end
 
     test "rejects events the page does not declare, naming the declared ones" do
-      conn = fire_event("/counter", "explode")
+      conn = fire_event("/fixtures/ping", "explode")
 
       assert conn.status == 404
       assert conn.resp_body =~ ~s("explode")
-      assert conn.resp_body =~ "increment"
+      assert conn.resp_body =~ "ping"
     end
 
     test "rejects events for paths with no page" do
-      conn = fire_event("/nowhere", "increment")
+      conn = fire_event("/nowhere", "ping")
 
       assert conn.status == 404
       assert conn.resp_body =~ "no page found"
     end
   end
 
-  test "native DELETE dispatches to the page's delete route" do
-    post = insert_post!()
-
-    conn = delete("/posts/#{post.id}")
-
-    assert conn.status == 303
-    assert Plug.Conn.get_resp_header(conn, "location") == ["/posts"]
-    assert Repo.get(Fractal.Post, post.id) == nil
-  end
-
   describe "CSRF protection" do
     test "a state-changing request without a token is rejected with instructions" do
-      post = insert_post!()
-
-      conn = raw(:post, "/posts", @post_params)
+      conn = raw(:post, "/fixtures", %{"name" => "mallory"})
 
       assert conn.status == 403
       assert conn.resp_body =~ "CSRF token missing or invalid"
       assert conn.resp_body =~ "Fractal.Form"
       assert conn.resp_body =~ "Fractal.Test"
-      # nothing was created or changed
-      assert Repo.aggregate(Fractal.Post, :count) == 1
-      assert Repo.get!(Fractal.Post, post.id).title == "A title"
     end
 
     test "a token-less event is rejected too" do
-      conn = raw(:post, "/fractal/event", %{"_fx_path" => "/counter", "_fx_event" => "increment"})
+      conn =
+        raw(:post, "/fractal/event", %{"_fx_path" => "/fixtures/ping", "_fx_event" => "ping"})
 
       assert conn.status == 403
       assert conn.resp_body =~ "CSRF token missing or invalid"
     end
 
     test "the real token round-trip works: page renders token, POST with it succeeds" do
-      get_conn = raw(:get, "/login", %{})
+      get_conn = raw(:get, "/fixtures/new", %{})
 
       assert [token] =
                Regex.run(~r/name="fractal-csrf-token" content="([^"]+)"/, get_conn.resp_body,
@@ -163,7 +180,7 @@ defmodule Fractal.RouterTest do
 
       conn =
         :post
-        |> conn("/login", %{"name" => "Ada", "_csrf_token" => token})
+        |> conn("/fixtures", %{"name" => "ada", "_csrf_token" => token})
         |> Plug.Conn.put_req_header("cookie", cookie)
         |> Router.call([])
 
@@ -171,7 +188,7 @@ defmodule Fractal.RouterTest do
     end
 
     test "the session cookie is SameSite=Lax" do
-      get_conn = raw(:get, "/login", %{})
+      get_conn = raw(:get, "/fixtures/new", %{})
 
       assert [set_cookie | _] = Plug.Conn.get_resp_header(get_conn, "set-cookie")
       assert set_cookie =~ "SameSite=Lax"
@@ -185,33 +202,8 @@ defmodule Fractal.RouterTest do
     assert conn.resp_body =~ "404"
     assert conn.resp_body =~ "/does-not-exist"
     # the 404 page lists existing routes and how to create the missing one
-    assert conn.resp_body =~ ~s(href="/")
+    assert conn.resp_body =~ ~s(href="/fixtures")
     assert conn.resp_body =~ "Create a Fractal page at /does-not-exist"
-  end
-
-  describe "assets" do
-    test "serves the CSS bundle with immutable caching" do
-      conn = get(Fractal.Assets.css_path())
-
-      assert conn.status == 200
-      assert {"content-type", "text/css; charset=utf-8"} in conn.resp_headers
-      assert {"cache-control", "public, max-age=31536000, immutable"} in conn.resp_headers
-      assert conn.resp_body =~ "--accent:"
-      assert conn.resp_body =~ ~s([data-page="home"])
-    end
-
-    test "serves static files under /assets" do
-      conn = get("/assets/logo.svg")
-
-      assert conn.status == 200
-      assert conn.resp_body =~ "<svg"
-    end
-
-    test "missing static files fall through to the 404 page" do
-      conn = get("/assets/nope.png")
-
-      assert conn.status == 404
-    end
   end
 
   test "GET /fractal/reload returns the live-reload token" do
@@ -229,5 +221,29 @@ defmodule Fractal.RouterTest do
     %{"token" => after_token} = JSON.decode!(get("/fractal/reload").resp_body)
 
     assert after_token != before_token
+  end
+
+  describe "assets" do
+    test "serves the CSS bundle with immutable caching" do
+      conn = get(Fractal.Assets.css_path())
+
+      assert conn.status == 200
+      assert {"content-type", "text/css; charset=utf-8"} in conn.resp_headers
+      assert {"cache-control", "public, max-age=31536000, immutable"} in conn.resp_headers
+      assert conn.resp_body =~ "--accent:"
+    end
+
+    test "serves static files under /assets" do
+      conn = get("/assets/logo.svg")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<svg"
+    end
+
+    test "missing static files fall through to the 404 page" do
+      conn = get("/assets/nope.png")
+
+      assert conn.status == 404
+    end
   end
 end

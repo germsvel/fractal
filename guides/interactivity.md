@@ -5,7 +5,7 @@ The model is declarative events over HTTP (in the spirit of HTMX):
 
 1. An element declares an event with `fx/2` attributes or a
    `trigger/3` button.
-2. Fractal's built-in runtime (injected by the layout) POSTs the event
+2. Fractal's built-in runtime (injected by the document) POSTs the event
    to `/fractal/event`.
 3. The page's `handle_event/2` returns an HTML fragment.
 4. The runtime swaps the fragment into the target element.
@@ -110,5 +110,5 @@ updated value). Undeclared events return 404; handler crashes return
   leaves room for a push transport later without changing the page API.
 
 Events carry the CSRF token automatically (the runtime reads it from
-the layout's meta tag) — one more reason interactions must go through
+the document's meta tag) — one more reason interactions must go through
 `fx/2`/`trigger/3` rather than hand-written `fetch` calls.

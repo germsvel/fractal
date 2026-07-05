@@ -29,7 +29,7 @@ The rules:
 
 - Styles are collected automatically (like routes) and **scoped
   automatically**: each block is wrapped in `[data-page="pricing"]`
-  using native CSS nesting, and the layout puts that attribute on
+  using native CSS nesting, and the document puts that attribute on
   `<main>`. Selectors in `style/0` are therefore relative to the page —
   and physically cannot affect any other page.
 - **Shared design goes in `assets/app.css`** — tokens (`--accent`,

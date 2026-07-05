@@ -1,102 +1,143 @@
 defmodule Fractal.Layout do
   @moduledoc """
-  The default HTML document shell.
+  The app's layout: app-wide document data and chrome, in one module.
 
-  Wraps a page's rendered content in a full HTML document with the page
-  title, a small default stylesheet, the CSRF token meta tag, flash
-  messages, a signed-in bar (when the session has a `"user_name"`), the
-  interactivity runtime, and — when live reload is enabled
-  (`config :fractal, :live_reload, true`, set automatically by
-  `mix fractal.server` in development) — a script that polls
-  `/fractal/reload` and reloads the browser when code recompiles.
+  The ownership model: **the framework owns the document
+  (`Fractal.Document` — head machinery, security, scripts), the app's
+  layout contributes app-wide data and chrome, the page contributes
+  content.** Apps never write `<head>` or envelope markup — they
+  contribute data and safe HTML through this module, discovered like
+  the checkpoint (one optional module, at most one):
+
+      # lib/my_app/layouts.ex
+      defmodule MyApp.Layouts do
+        use Fractal.Layout
+
+        # app-wide document data — rendered by the framework, escaped
+        def site do
+          %{
+            name: "My App",              # <title>Page — My App</title>
+            lang: "en",                  # <html lang="en">
+            favicon: asset_path("logo.svg"),
+            theme_color: "#0b1021"
+          }
+        end
+
+        # app UI above <main> on every page: nav, session bar, footer
+        def chrome(assigns) do
+          tag(:nav, [class: "site-nav"], [
+            tag(:a, [href: "/"], ["Home"]),
+            greeting(assigns.session["user_name"])
+          ])
+        end
+
+        # scoped to the chrome — cannot leak into pages
+        def style do
+          \"\"\"
+          .site-nav { display: flex; gap: 1rem; }
+          \"\"\"
+        end
+      end
+
+  ## The rules
+
+    * All callbacks are optional; an app without a layout module gets
+      the plain document.
+    * `site/0` returns data — the framework composes and escapes it.
+      Keys: `:name`, `:lang` (default `"en"`), `:favicon` (use
+      `asset_path/1`, so missing files fail verify), `:theme_color`.
+    * `chrome/1` receives the usual assigns (session, context, path)
+      and returns safe HTML (or `nil` to render nothing); it must
+      tolerate empty assigns and goes through the same verification
+      scans as pages. Session keys and routes it uses (a `"user_name"`,
+      a `/logout`) are the app's own — the framework knows nothing
+      about them.
+    * `style/0` is scoped under the chrome (a `data-layout` wrapper),
+      exactly like page and component styles.
   """
 
-  alias Fractal.{Assets, Form, HTML, Page}
+  alias Fractal.HTML
 
-  @live_reload_script """
-  <script>
-  (function () {
-    var token = null;
-    setInterval(function () {
-      fetch("/fractal/reload")
-        .then(function (resp) { return resp.json(); })
-        .then(function (data) {
-          if (token === null) { token = data.token; }
-          else if (token !== data.token) { location.reload(); }
-        })
-        .catch(function () {});
-    }, 500);
-  })();
-  </script>
-  """
+  @callback site() :: map()
+  @callback chrome(assigns :: map()) :: HTML.Safe.t() | iodata() | nil
+  @callback style() :: String.t()
 
-  @doc "Renders a full HTML document for a page module."
-  @spec render(module(), map()) :: String.t()
-  def render(page, assigns) do
-    shell(page.title(), HTML.to_safe(page.render(assigns)),
-      flash: assigns[:flash],
-      session: assigns[:session],
-      page: page
-    )
-  end
+  @optional_callbacks site: 0, chrome: 1, style: 0
 
-  @doc """
-  Renders a full HTML document from a title and body content.
+  defmacro __using__(opts) do
+    quote bind_quoted: [opts: opts] do
+      if opts != [] do
+        raise ArgumentError, "use Fractal.Layout takes no options"
+      end
 
-  Options: `:flash` (map of level → message, rendered as banners),
-  `:session` (used for the signed-in bar when it has a `"user_name"`),
-  and `:page` (the page module — sets the `data-page` attribute that
-  scopes the page's `style/0`).
-  """
-  @spec shell(String.t(), term(), keyword()) :: String.t()
-  def shell(title, body, opts \\ []) do
-    IO.iodata_to_binary([
-      "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n",
-      "<meta charset=\"utf-8\">\n",
-      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n",
-      "<meta name=\"fractal-csrf-token\" content=\"",
-      HTML.escape(Plug.CSRFProtection.get_csrf_token()),
-      "\">\n",
-      "<title>",
-      HTML.escape(title),
-      "</title>\n<link rel=\"stylesheet\" href=\"",
-      Assets.css_path(),
-      "\">\n</head>\n<body>\n",
-      session_bar(opts[:session]),
-      flash_banners(opts[:flash]),
-      "<main",
-      page_attr(opts[:page]),
-      ">",
-      HTML.to_safe(body).content,
-      "</main>\n",
-      Fractal.Interactive.runtime_js(),
-      live_reload_script(),
-      "</body>\n</html>\n"
-    ])
-  end
+      @behaviour Fractal.Layout
 
-  defp page_attr(nil), do: ""
-  defp page_attr(page), do: [" data-page=\"", Page.slug(page), "\""]
+      import Fractal.HTML
+      import Fractal.Interactive
+      import Fractal.Form
+      import Fractal.Assets, only: [asset_path: 1]
+      import Fractal.Component, only: [component: 1, component: 2]
 
-  defp session_bar(%{"user_name" => name}) when is_binary(name) and name != "" do
-    HTML.tag(:div, [class: "session-bar"], [
-      "Signed in as ",
-      HTML.tag(:strong, [], [name]),
-      Form.button_to("Log out", "/logout", method: :delete)
-    ]).content
-  end
-
-  defp session_bar(_session), do: ""
-
-  defp flash_banners(flash) when flash in [nil, %{}], do: ""
-
-  defp flash_banners(flash) do
-    for {level, message} <- flash do
-      HTML.tag(:div, [class: "flash flash-#{level}", role: "alert"], [to_string(message)]).content
+      @doc false
+      def __fractal_layout__, do: true
     end
   end
 
-  defp live_reload_script do
-    if Application.get_env(:fractal, :live_reload, false), do: @live_reload_script, else: ""
+  # -- discovery ----------------------------------------------------------
+
+  @doc "The app's layout module, or `nil` (there should be at most one)."
+  @spec module() :: module() | nil
+  def module, do: modules() |> List.first()
+
+  @doc false
+  @spec modules() :: [module()]
+  def modules do
+    Fractal.Discovery.modules()
+    |> Enum.filter(&layout_module?/1)
+    |> Enum.sort_by(&inspect/1)
+  end
+
+  @doc "Returns `true` if `module` is a compiled layout module."
+  @spec layout_module?(module()) :: boolean()
+  def layout_module?(module) do
+    Code.ensure_loaded?(module) and
+      function_exported?(module, :__fractal_layout__, 0) and
+      __MODULE__ in behaviours(module)
+  end
+
+  @doc "The app-wide document data, with defaults applied."
+  @spec site() :: map()
+  def site do
+    declared =
+      case module() do
+        nil -> %{}
+        mod -> if function_exported?(mod, :site, 0), do: mod.site(), else: %{}
+      end
+
+    Map.merge(%{lang: "en"}, declared)
+  end
+
+  @doc "The app's chrome for these assigns, or `nil`."
+  @spec chrome(map()) :: HTML.Safe.t() | iodata() | nil
+  def chrome(assigns) do
+    case module() do
+      nil -> nil
+      mod -> if function_exported?(mod, :chrome, 1), do: mod.chrome(assigns), else: nil
+    end
+  end
+
+  @doc "The layout's `style/0` CSS, or `nil`."
+  @spec style() :: String.t() | nil
+  def style do
+    case module() do
+      nil -> nil
+      mod -> if function_exported?(mod, :style, 0), do: mod.style(), else: nil
+    end
+  end
+
+  defp behaviours(module) do
+    module.module_info(:attributes)
+    |> Keyword.get_values(:behaviour)
+    |> List.flatten()
   end
 end

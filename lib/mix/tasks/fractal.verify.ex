@@ -31,6 +31,7 @@ defmodule Mix.Tasks.Fractal.Verify do
         Fractal.Verify.pending_migrations(),
         Fractal.Verify.invariants() | Fractal.Verify.checkpoint()
       ] ++
+        Fractal.Verify.layout() ++
         Fractal.Verify.run() ++
         Fractal.Verify.run_components() ++
         Fractal.Verify.run_invariants() ++

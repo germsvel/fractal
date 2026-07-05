@@ -62,7 +62,7 @@ end)
 - `render/1` may return the result of `tag/3`/`raw/1`, a plain string
   (which will be escaped), or a list of those.
 
-Pages are wrapped in `Fractal.Layout` (document shell, `<title>`, default
+Pages are wrapped in `Fractal.Document` (the HTML envelope, `<title>`, default
 stylesheet, and the live-reload script in dev). Pages only render their
 body content.
 

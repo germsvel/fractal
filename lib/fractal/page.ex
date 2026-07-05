@@ -26,7 +26,7 @@ defmodule Fractal.Page do
     * `:path` (required) — the GET route, a string starting with `/`.
       Segments may be dynamic: `"/posts/:id"` binds `params["id"]`.
       Validated at compile time.
-    * `:title` (optional) — the page title used in the layout. Defaults
+    * `:title` (optional) — the page title used in the document. Defaults
       to a humanized version of the module name.
     * `:post` (optional) — a POST route handled by this same module's
       `handle_post/1`.
@@ -117,7 +117,7 @@ defmodule Fractal.Page do
 
   Directives: `session:` (map merged into the session),
   `clear_session: true` (empties it first), and `flash:` (a map of
-  level → message the layout shows once on the next page load). They
+  level → message the document shows once on the next page load). They
   compose with `{:render, ...}` and `{:fragment, ...}` too. Keep the
   session for identity-scale data — it lives in a ~4KB cookie; app
   state belongs in the database or in the DOM (event `values:`).

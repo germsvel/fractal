@@ -2,7 +2,8 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
   @shortdoc "Generates a Fractal page module and its test"
 
   @moduledoc """
-  Generates a page module under `lib/fractal/pages/` and a matching test.
+  Generates a page module under `lib/<app>/pages/` and a matching test
+  (paths and module names derive from the host app).
 
       mix fractal.gen.page About
       mix fractal.gen.page ContactUs --path /contact --title "Contact us"
@@ -55,13 +56,15 @@ defmodule Mix.Tasks.Fractal.Gen.Page do
 
     module_suffix = Macro.camelize(name)
     file_base = Macro.underscore(module_suffix)
-    module = "Fractal.Pages.#{module_suffix}"
+    namespace = Fractal.Discovery.namespace()
+    app_dir = Fractal.Discovery.app_dir()
+    module = "#{namespace}.Pages.#{module_suffix}"
     route = opts[:path] || "/" <> String.replace(file_base, "_", "-")
     title = opts[:title] || humanize(file_base)
     events = parse_events(opts[:events])
 
-    page_file = Path.join(["lib", "fractal", "pages", "#{file_base}.ex"])
-    test_file = Path.join(["test", "fractal", "pages", "#{file_base}_test.exs"])
+    page_file = Path.join(["lib", app_dir, "pages", "#{file_base}.ex"])
+    test_file = Path.join(["test", app_dir, "pages", "#{file_base}_test.exs"])
 
     Enum.each([page_file, test_file], fn file ->
       if File.exists?(file), do: Mix.raise("#{file} already exists")

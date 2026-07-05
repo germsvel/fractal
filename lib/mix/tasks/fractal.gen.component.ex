@@ -2,8 +2,8 @@ defmodule Mix.Tasks.Fractal.Gen.Component do
   @shortdoc "Generates a UI component and its test"
 
   @moduledoc """
-  Generates a component under `lib/fractal/components/` and a matching
-  test.
+  Generates a component under `lib/<app>/components/` and a matching
+  test (paths and module names derive from the host app).
 
       mix fractal.gen.component Card
 
@@ -28,10 +28,12 @@ defmodule Mix.Tasks.Fractal.Gen.Component do
     camel = Macro.camelize(name)
     file_base = Macro.underscore(camel)
     slug = String.replace(file_base, "_", "-")
-    module = "Fractal.Components.#{camel}"
+    namespace = Fractal.Discovery.namespace()
+    app_dir = Fractal.Discovery.app_dir()
+    module = "#{namespace}.Components.#{camel}"
 
-    component_file = Path.join(["lib", "fractal", "components", "#{file_base}.ex"])
-    test_file = Path.join(["test", "fractal", "components", "#{file_base}_test.exs"])
+    component_file = Path.join(["lib", app_dir, "components", "#{file_base}.ex"])
+    test_file = Path.join(["test", app_dir, "components", "#{file_base}_test.exs"])
 
     Enum.each([component_file, test_file], fn file ->
       if File.exists?(file), do: Mix.raise("#{file} already exists")
@@ -90,7 +92,7 @@ defmodule Mix.Tasks.Fractal.Gen.Component do
 
       import Fractal.Component, only: [component: 2]
 
-      alias Fractal.Components.#{camel}
+      alias #{module}
       alias Fractal.HTML
 
       test "passes Fractal's component verification checks" do

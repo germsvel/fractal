@@ -4,7 +4,7 @@ defmodule Fractal.Interactive do
 
   Interactivity works without the developer (or the agent) writing any
   JavaScript. Elements declare an event with `fx/2` or `trigger/3`; a
-  small runtime the layout injects posts the event to the server; the
+  small runtime the document injects posts the event to the server; the
   page's `handle_event/2` returns an HTML fragment; the runtime swaps it
   into the target element. Request in, HTML out — the same mental model
   as the rest of the framework.

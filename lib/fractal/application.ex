@@ -5,10 +5,10 @@ defmodule Fractal.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      Fractal.Repo,
-      Fractal.LiveReload
-    ]
+    # The framework's application starts framework services. Repos listed
+    # under :fractal's own ecto_repos also start here — that's this repo
+    # self-hosting its sample app; host apps supervise their own repos.
+    children = Application.get_env(:fractal, :ecto_repos, []) ++ [Fractal.LiveReload]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Fractal.Supervisor)
   end

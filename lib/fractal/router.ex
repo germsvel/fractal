@@ -43,7 +43,7 @@ defmodule Fractal.Router do
   `fx-redirect` header).
 
   The router also serves `GET /fractal/reload`, the live-reload token
-  endpoint polled by the script `Fractal.Layout` injects in development.
+  endpoint polled by the script `Fractal.Document` injects in development.
   """
 
   @behaviour Plug
@@ -52,7 +52,7 @@ defmodule Fractal.Router do
 
   require Logger
 
-  alias Fractal.{Checkpoint, HTML, Layout, LiveReload, Page}
+  alias Fractal.{Checkpoint, Document, HTML, LiveReload, Page}
 
   @parsers_opts Plug.Parsers.init(parsers: [:urlencoded, :multipart], pass: ["*/*"])
   @static_opts Plug.Static.init(
@@ -140,7 +140,7 @@ defmodule Fractal.Router do
     if dev_mode?() do
       conn
       |> put_resp_content_type("text/html")
-      |> send_resp(200, Layout.shell("Components", Fractal.Component.gallery()))
+      |> send_resp(200, Document.shell("Components", Fractal.Component.gallery()))
     else
       not_found(conn, current_path(conn))
     end
@@ -298,7 +298,7 @@ defmodule Fractal.Router do
 
     case Checkpoint.run(Page.requires(page), assigns) do
       :ok ->
-        html = Layout.render(page, assigns)
+        html = Document.render(page, assigns)
 
         conn
         |> put_resp_content_type("text/html")
@@ -334,7 +334,7 @@ defmodule Fractal.Router do
 
       {:render, extra_assigns, directives} when is_map(extra_assigns) ->
         conn = apply_directives(conn, directives)
-        html = Layout.render(page, Map.merge(assigns, extra_assigns))
+        html = Document.render(page, Map.merge(assigns, extra_assigns))
 
         conn
         |> put_resp_content_type("text/html")
@@ -349,7 +349,7 @@ defmodule Fractal.Router do
   defp handle_event(conn, page, event, path_params) do
     params =
       conn.params
-      |> Map.drop(["_fx_path", "_fx_event"])
+      |> Map.drop(["_fx_path", "_fx_event", "_csrf_token"])
       |> Map.merge(path_params)
 
     assigns =
@@ -461,9 +461,12 @@ defmodule Fractal.Router do
   end
 
   defp build_assigns(conn, path_params) do
+    # framework plumbing fields never reach pages
+    params = conn.params |> Map.drop(["_csrf_token", "_method"]) |> Map.merge(path_params)
+
     %{
       conn: conn,
-      params: Map.merge(conn.params, path_params),
+      params: params,
       path: current_path(conn),
       session: page_session(conn)
     }
@@ -492,7 +495,7 @@ defmodule Fractal.Router do
 
     conn
     |> put_resp_content_type("text/html")
-    |> send_resp(500, Layout.shell("Error", body))
+    |> send_resp(500, Document.shell("Error", body))
   end
 
   defp not_found(conn, path) do
@@ -522,7 +525,7 @@ defmodule Fractal.Router do
 
     conn
     |> put_resp_content_type("text/html")
-    |> send_resp(404, Layout.shell("Not found", body))
+    |> send_resp(404, Document.shell("Not found", body))
   end
 
   defp candidate_modules, do: Fractal.Discovery.modules()

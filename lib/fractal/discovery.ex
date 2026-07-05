@@ -1,14 +1,59 @@
 defmodule Fractal.Discovery do
   @moduledoc false
 
-  # Scans the app's ebin for modules instead of using Application.spec/2 so
-  # that modules compiled after boot (by the dev reloader) are still found.
-  # Used by Fractal.Router (pages) and Fractal.Component (components).
+  # The framework's knowledge of its host application. Fractal runs
+  # inside the host's mix project; everything host-specific (which app
+  # to scan for pages, what namespace generators emit, which repo owns
+  # migrations) derives from here.
+
+  @doc "The host application. Defaults to the enclosing mix project."
+  @spec host_app() :: atom()
+  def host_app do
+    Application.get_env(:fractal, :otp_app) || Mix.Project.config()[:app]
+  end
+
+  @doc """
+  The host's base module namespace as a string (e.g. \"Blog\").
+
+  Defaults to the camelized app name; override with
+  `config :fractal, namespace: MyApp`.
+  """
+  @spec namespace() :: String.t()
+  def namespace do
+    case Application.get_env(:fractal, :namespace) do
+      nil -> host_app() |> to_string() |> Macro.camelize()
+      module when is_atom(module) -> module |> Module.split() |> Enum.join(".")
+      binary when is_binary(binary) -> binary
+    end
+  end
+
+  @doc "The host's source directory name (`lib/<app_dir>/...`)."
+  @spec app_dir() :: String.t()
+  def app_dir, do: to_string(host_app())
+
+  @doc """
+  The host's repo (first entry of the host's `:ecto_repos`), or `nil`
+  for repo-less apps.
+  """
+  @spec host_repo() :: module() | nil
+  def host_repo do
+    case Application.get_env(host_app(), :ecto_repos, []) do
+      [repo | _rest] -> repo
+      [] -> nil
+    end
+  end
+
+  # Scans the host app's ebin for modules instead of using
+  # Application.spec/2 so that modules compiled after boot (by the dev
+  # reloader) are still found. Used for pages, components, the
+  # checkpoint, invariants, and the layout.
   @spec modules() :: [module()]
   def modules do
-    case :code.lib_dir(:fractal) do
+    app = host_app()
+
+    case :code.lib_dir(app) do
       {:error, _reason} ->
-        Application.spec(:fractal, :modules) || []
+        Application.spec(app, :modules) || []
 
       dir ->
         [List.to_string(dir), "ebin", "*.beam"]

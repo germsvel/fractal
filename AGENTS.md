@@ -7,7 +7,16 @@ so purely with AI — so this file is the contract for how agents work here.
 
 - A **page** is one module in `lib/fractal/pages/` using `Fractal.Page`.
   Routes are auto-discovered; there is no router file to edit. Dynamic
-  segments (`/posts/:id`) bind `params["id"]`.
+  segments (`/posts/:id`) bind `params["id"]`. (Paths and namespaces
+  derive from the host app — in this repo the host is `fractal` itself;
+  in a consuming app they'd be `lib/blog/pages/`, `Blog.Pages.*`.)
+- **The framework owns the document, the app's layout contributes
+  app-wide data and chrome, the page contributes content.** The layout
+  module (`lib/fractal/layouts.ex`, `use Fractal.Layout`) supplies
+  `site/0` (name, lang, favicon, theme color) and `chrome/1` (nav /
+  session bar above `<main>`) — data and safe HTML in, framework
+  renders. Never ask for an app-owned root template or `<head>` markup;
+  there isn't one. See `guides/layout.md`.
 - A page that renders a form also **handles the submission in the same
   file**: `use Fractal.Page, path: "/posts/new", post: "/posts"` plus
   `handle_post/1` — likewise `put:`/`handle_put/1` (updates; matches

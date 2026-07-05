@@ -40,7 +40,7 @@ Three directives, composable with every return type:
 - `clear_session: true` — empties the session first (so a logout can
   still set a flash)
 - `flash:` — a map of level → message (`"info"` and `"error"` are
-  styled) shown by the layout **once**, on the next page load
+  styled) shown by the document **once**, on the next page load
 
 `grep -r "session:" lib/fractal/pages` finds every place session state
 changes.
@@ -62,10 +62,11 @@ bytes. The session cookie is `SameSite=Lax`.
 
 ### The signed-in bar
 
-The layout shows a "Signed in as … / Log out" bar on every page when
-the session has a `"user_name"` (see the demo page at `/login`). Store
-a display name under that key to use it; the log-out button targets a
-`delete: "/logout"` route.
+This app shows a "Signed in as … / Log out" bar on every page — it is
+app code, not framework behavior: the app's layout module renders it
+from `session["user_name"]` and points it at this app's `/logout`
+route (see `guides/layout.md` and the demo page at `/login`). The
+framework knows nothing about either.
 
 ## CSRF protection
 

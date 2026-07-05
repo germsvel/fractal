@@ -117,11 +117,12 @@ defmodule Fractal.Verify do
       else
         kind = if Fractal.Component.component?(module), do: "components", else: "pages"
         file_base = module |> Module.split() |> List.last() |> Macro.underscore()
+        app_dir = Fractal.Discovery.app_dir()
 
         {name,
          {:error,
           "no test file references #{inspect(module)} — add " <>
-            "test/fractal/#{kind}/#{file_base}_test.exs (the generators scaffold these; " <>
+            "test/#{app_dir}/#{kind}/#{file_base}_test.exs (the generators scaffold these; " <>
             "see the testing conventions in the guides)"}}
       end
     end)
@@ -202,18 +203,25 @@ defmodule Fractal.Verify do
   """
   @spec pending_migrations() :: result()
   def pending_migrations do
-    pending =
-      for {:down, version, name} <- Ecto.Migrator.migrations(Fractal.Repo) do
-        "#{version}_#{name}"
-      end
-
-    case pending do
-      [] ->
+    case Fractal.Discovery.host_repo() do
+      # a repo-less app has nothing to migrate
+      nil ->
         {"migrations are up", :ok}
 
-      pending ->
-        {"migrations are up",
-         {:error, "pending: #{Enum.join(pending, ", ")} — run `mix ecto.migrate`"}}
+      repo ->
+        pending =
+          for {:down, version, name} <- Ecto.Migrator.migrations(repo) do
+            "#{version}_#{name}"
+          end
+
+        case pending do
+          [] ->
+            {"migrations are up", :ok}
+
+          pending ->
+            {"migrations are up",
+             {:error, "pending: #{Enum.join(pending, ", ")} — run `mix ecto.migrate`"}}
+        end
     end
   rescue
     exception ->
@@ -221,6 +229,87 @@ defmodule Fractal.Verify do
        {:error,
         "could not check migrations (is the database running? try `mix ecto.setup`): " <>
           Exception.message(exception)}}
+  end
+
+  @doc """
+  Checks the app's layout module: at most one exists, `site/0` returns
+  well-formed data, `chrome/1` tolerates empty assigns and passes the
+  same scans as pages, and its `style/0` is balanced.
+  """
+  @spec layout() :: [result()]
+  def layout do
+    case Fractal.Layout.modules() do
+      [] ->
+        [{"the layout is well-formed", :ok}]
+
+      [mod] ->
+        [
+          {"the layout is well-formed", :ok},
+          {"#{inspect(mod)} declares valid site data", validate_site()},
+          {"#{inspect(mod)} declares valid styles", validate_layout_style()},
+          {"#{inspect(mod)} renders its chrome", validate_chrome()}
+        ]
+
+      many ->
+        [
+          {"the layout is well-formed",
+           {:error,
+            "found #{length(many)} layout modules (#{Enum.map_join(many, ", ", &inspect/1)}) — " <>
+              "the app's layout lives in exactly one"}}
+        ]
+    end
+  end
+
+  defp validate_site do
+    site = Fractal.Layout.site()
+
+    string_keys = [:name, :lang, :favicon, :theme_color]
+
+    invalid =
+      Enum.filter(string_keys, fn key ->
+        Map.has_key?(site, key) and not is_binary(site[key])
+      end)
+
+    cond do
+      not is_map(site) -> {:error, "site/0 must return a map, got: #{inspect(site)}"}
+      invalid != [] -> {:error, "site data must be strings — invalid: #{inspect(invalid)}"}
+      true -> :ok
+    end
+  rescue
+    exception -> {:error, "site/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_layout_style do
+    case Fractal.Layout.style() do
+      nil ->
+        :ok
+
+      style when is_binary(style) ->
+        if count_occurrences(style, "{") == count_occurrences(style, "}") do
+          :ok
+        else
+          {:error, "style/0 has unbalanced braces"}
+        end
+
+      other ->
+        {:error, "style/0 must return a CSS string, got: #{inspect(other)}"}
+    end
+  rescue
+    exception -> {:error, "style/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_chrome do
+    assigns = %{conn: nil, params: %{}, session: %{}, context: %{}, path: "/"}
+
+    case Fractal.Layout.chrome(assigns) do
+      nil ->
+        :ok
+
+      content ->
+        scan_html(content |> HTML.to_safe() |> HTML.safe_to_string())
+    end
+  rescue
+    exception -> {:error, "chrome/1 raised: #{Exception.message(exception)}"}
   end
 
   @doc """
@@ -343,10 +432,12 @@ defmodule Fractal.Verify do
   """
   @spec unused_components() :: [String.t()]
   def unused_components do
+    components_dir = "lib/#{Fractal.Discovery.app_dir()}/components/"
+
     sources =
       "lib/**/*.ex"
       |> Path.wildcard()
-      |> Enum.reject(&String.starts_with?(&1, "lib/fractal/components/"))
+      |> Enum.reject(&String.starts_with?(&1, components_dir))
       |> Enum.map_join("\n", &File.read!/1)
 
     for component <- Fractal.Component.all(),

@@ -8,16 +8,19 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
   creates
 
-    * `lib/fractal/post.ex` — the Ecto schema and changeset
+    * `lib/<app>/post.ex` — the Ecto schema and changeset
     * `priv/repo/migrations/<timestamp>_create_posts.exs`
-    * `lib/fractal/pages/posts.ex` — index page at `/posts`
-    * `lib/fractal/pages/new_post.ex` — form at `/posts/new`, handling
+    * `lib/<app>/pages/posts.ex` — index page at `/posts`
+    * `lib/<app>/pages/new_post.ex` — form at `/posts/new`, handling
       `POST /posts` in the same file
-    * `lib/fractal/pages/post.ex` — show page at `/posts/:id`, with the
+    * `lib/<app>/pages/post.ex` — show page at `/posts/:id`, with the
       delete button, handling `DELETE /posts/:id` in the same file
-    * `lib/fractal/pages/edit_post.ex` — edit form at `/posts/:id/edit`,
+    * `lib/<app>/pages/edit_post.ex` — edit form at `/posts/:id/edit`,
       handling `PUT /posts/:id` in the same file
-    * `test/fractal/pages/posts_test.exs` — tests for all four pages
+    * `test/<app>/pages/posts_test.exs` — tests for all four pages
+
+  Paths and module names derive from the host app (`lib/blog/pages/`,
+  `Blog.Pages.Posts`, `Blog.Repo`, ...).
 
   Supported field types: `string`, `text`, `integer`, `float`, `boolean`,
   `date`. All fields are required by default — edit the schema's
@@ -54,6 +57,11 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     singular = Macro.underscore(camel)
     plural = opts[:plural] || singular <> "s"
     fields = Enum.map(field_args, &parse_field!/1)
+    namespace = Fractal.Discovery.namespace()
+
+    repo =
+      Fractal.Discovery.host_repo() ||
+        Mix.raise("mix fractal.gen.resource needs a repo — configure :ecto_repos for your app")
 
     context = %{
       camel: camel,
@@ -63,17 +71,23 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
       route: "/" <> String.replace(plural, "_", "-"),
       human: humanize(singular),
       human_downcase: String.downcase(humanize(singular)),
-      fields: fields
+      fields: fields,
+      ns: namespace,
+      schema: "#{namespace}.#{camel}",
+      repo: inspect(repo),
+      data_case: "#{namespace}.DataCase"
     }
 
+    app_dir = Fractal.Discovery.app_dir()
+
     files = [
-      {Path.join(["lib", "fractal", "#{singular}.ex"]), schema_template(context)},
+      {Path.join(["lib", app_dir, "#{singular}.ex"]), schema_template(context)},
       {migration_path(plural), migration_template(context)},
-      {Path.join(["lib", "fractal", "pages", "#{plural}.ex"]), index_template(context)},
-      {Path.join(["lib", "fractal", "pages", "new_#{singular}.ex"]), new_template(context)},
-      {Path.join(["lib", "fractal", "pages", "#{singular}.ex"]), show_template(context)},
-      {Path.join(["lib", "fractal", "pages", "edit_#{singular}.ex"]), edit_template(context)},
-      {Path.join(["test", "fractal", "pages", "#{plural}_test.exs"]), test_template(context)}
+      {Path.join(["lib", app_dir, "pages", "#{plural}.ex"]), index_template(context)},
+      {Path.join(["lib", app_dir, "pages", "new_#{singular}.ex"]), new_template(context)},
+      {Path.join(["lib", app_dir, "pages", "#{singular}.ex"]), show_template(context)},
+      {Path.join(["lib", app_dir, "pages", "edit_#{singular}.ex"]), edit_template(context)},
+      {Path.join(["test", app_dir, "pages", "#{plural}_test.exs"]), test_template(context)}
     ]
 
     Enum.each(files, fn {file, _contents} ->
@@ -158,7 +172,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     field_names = Enum.map_join(ctx.fields, ", ", fn {name, _type} -> ":#{name}" end)
 
     """
-    defmodule Fractal.#{ctx.camel} do
+    defmodule #{ctx.schema} do
       @moduledoc "The #{ctx.human} schema, backed by the #{ctx.plural} table."
 
       use Ecto.Schema
@@ -188,7 +202,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
       end)
 
     """
-    defmodule Fractal.Repo.Migrations.Create#{ctx.camel_plural} do
+    defmodule #{ctx.repo}.Migrations.Create#{ctx.camel_plural} do
       use Ecto.Migration
 
       def change do
@@ -206,18 +220,18 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     {first_field, _type} = hd(ctx.fields)
 
     """
-    defmodule Fractal.Pages.#{ctx.camel_plural} do
+    defmodule #{ctx.ns}.Pages.#{ctx.camel_plural} do
       @moduledoc "Lists all #{ctx.plural}, served at #{ctx.route}."
 
       use Fractal.Page, path: "#{ctx.route}", title: "#{humanize(ctx.plural)}"
 
       import Ecto.Query, only: [order_by: 2]
 
-      alias Fractal.Repo
+      alias #{ctx.repo}
 
       @impl Fractal.Page
       def render(_assigns) do
-        #{ctx.plural} = Repo.all(order_by(Fractal.#{ctx.camel}, desc: :id))
+        #{ctx.plural} = Repo.all(order_by(#{ctx.schema}, desc: :id))
 
         tag(:section, [], [
           tag(:h1, [], ["#{humanize(ctx.plural)}"]),
@@ -247,18 +261,18 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     form_fields = Enum.map_join(ctx.fields, ",\n        ", &form_field/1)
 
     """
-    defmodule Fractal.Pages.New#{ctx.camel} do
+    defmodule #{ctx.ns}.Pages.New#{ctx.camel} do
       @moduledoc "Form to create a #{ctx.human_downcase}; handles POST #{ctx.route} in this same file."
 
       use Fractal.Page, path: "#{ctx.route}/new", title: "New #{ctx.human_downcase}", post: "#{ctx.route}"
 
       import Fractal.Form
 
-      alias Fractal.Repo
+      alias #{ctx.repo}
 
       @impl Fractal.Page
       def render(assigns) do
-        changeset = assigns[:changeset] || Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, %{})
+        changeset = assigns[:changeset] || #{ctx.schema}.changeset(%#{ctx.schema}{}, %{})
 
         tag(:section, [], [
           tag(:h1, [], ["New #{ctx.human_downcase}"]),
@@ -272,7 +286,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       @impl Fractal.Page
       def handle_post(assigns) do
-        case Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, assigns.params)) do
+        case Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, assigns.params)) do
           {:ok, #{ctx.singular}} -> {:redirect, "#{ctx.route}/\#{#{ctx.singular}.id}"}
           {:error, changeset} -> {:render, %{changeset: changeset}}
         end
@@ -294,15 +308,15 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     details = if detail_lines == "", do: "", else: "\n          " <> detail_lines <> ","
 
     """
-    defmodule Fractal.Pages.#{ctx.camel} do
+    defmodule #{ctx.ns}.Pages.#{ctx.camel} do
       @moduledoc "Shows a single #{ctx.human_downcase}, served at #{ctx.route}/:id; handles DELETE #{ctx.route}/:id in this same file."
 
       use Fractal.Page, path: "#{ctx.route}/:id", title: "#{ctx.human}", delete: "#{ctx.route}/:id"
 
       import Fractal.Form
 
-      alias Fractal.Components.EmptyState
-      alias Fractal.Repo
+      alias #{ctx.ns}.Components.EmptyState
+      alias #{ctx.repo}
 
       @impl Fractal.Page
       def render(assigns) do
@@ -343,7 +357,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       defp fetch(id) when is_binary(id) do
         case Integer.parse(id) do
-          {id, ""} -> Repo.get(Fractal.#{ctx.camel}, id)
+          {id, ""} -> Repo.get(#{ctx.schema}, id)
           _ -> nil
         end
       end
@@ -357,7 +371,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     form_fields = Enum.map_join(ctx.fields, ",\n              ", &form_field/1)
 
     """
-    defmodule Fractal.Pages.Edit#{ctx.camel} do
+    defmodule #{ctx.ns}.Pages.Edit#{ctx.camel} do
       @moduledoc "Form to edit a #{ctx.human_downcase}; handles PUT #{ctx.route}/:id in this same file."
 
       use Fractal.Page,
@@ -367,8 +381,8 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       import Fractal.Form
 
-      alias Fractal.Components.EmptyState
-      alias Fractal.Repo
+      alias #{ctx.ns}.Components.EmptyState
+      alias #{ctx.repo}
 
       @impl Fractal.Page
       def render(assigns) do
@@ -381,7 +395,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
             )
 
           #{ctx.singular} ->
-            changeset = assigns[:changeset] || Fractal.#{ctx.camel}.changeset(#{ctx.singular}, %{})
+            changeset = assigns[:changeset] || #{ctx.schema}.changeset(#{ctx.singular}, %{})
 
             tag(:section, [], [
               tag(:h1, [], ["Edit #{ctx.human_downcase}"]),
@@ -401,7 +415,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
             {:redirect, "#{ctx.route}"}
 
           #{ctx.singular} ->
-            case Repo.update(Fractal.#{ctx.camel}.changeset(#{ctx.singular}, assigns.params)) do
+            case Repo.update(#{ctx.schema}.changeset(#{ctx.singular}, assigns.params)) do
               {:ok, #{ctx.singular}} -> {:redirect, "#{ctx.route}/\#{#{ctx.singular}.id}"}
               {:error, changeset} -> {:render, %{changeset: changeset}}
             end
@@ -410,7 +424,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       defp fetch(id) when is_binary(id) do
         case Integer.parse(id) do
-          {id, ""} -> Repo.get(Fractal.#{ctx.camel}, id)
+          {id, ""} -> Repo.get(#{ctx.schema}, id)
           _ -> nil
         end
       end
@@ -433,21 +447,21 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
     updated_value = sample_value({first_field, first_type}, 9)
 
     """
-    defmodule Fractal.Pages.#{ctx.camel_plural}Test do
-      use Fractal.DataCase, async: true
+    defmodule #{ctx.ns}.Pages.#{ctx.camel_plural}Test do
+      use #{ctx.data_case}, async: true
 
       import Fractal.Test
 
-      alias Fractal.Repo
+      alias #{ctx.repo}
 
       @valid_params %{#{valid_params}}
 
       test "all #{ctx.human_downcase} pages pass Fractal's verification checks" do
         pages = [
-          Fractal.Pages.#{ctx.camel_plural},
-          Fractal.Pages.New#{ctx.camel},
+          #{ctx.ns}.Pages.#{ctx.camel_plural},
+          #{ctx.ns}.Pages.New#{ctx.camel},
           Fractal.Pages.#{ctx.camel},
-          Fractal.Pages.Edit#{ctx.camel}
+          #{ctx.ns}.Pages.Edit#{ctx.camel}
         ]
 
         results = Fractal.Verify.run(pages)
@@ -456,7 +470,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       test "GET #{ctx.route} lists #{ctx.plural}" do
         {:ok, _#{ctx.singular}} =
-          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+          Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, @valid_params))
 
         conn = get("#{ctx.route}")
 
@@ -490,7 +504,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
         assert conn.status == 200
         assert conn.resp_body =~ "can&#39;t be blank"
-        assert Repo.aggregate(Fractal.#{ctx.camel}, :count) == 0
+        assert Repo.aggregate(#{ctx.schema}, :count) == 0
       end
 
       test "GET #{ctx.route}/:id for a missing #{ctx.human_downcase} renders not found" do
@@ -502,7 +516,7 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       test "GET #{ctx.route}/:id/edit shows the pre-filled edit form" do
         {:ok, #{ctx.singular}} =
-          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+          Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, @valid_params))
 
         conn = get("#{ctx.route}/\#{#{ctx.singular}.id}/edit")
 
@@ -514,35 +528,35 @@ defmodule Mix.Tasks.Fractal.Gen.Resource do
 
       test "PUT #{ctx.route}/:id updates the #{ctx.human_downcase} and redirects to it" do
         {:ok, #{ctx.singular}} =
-          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+          Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, @valid_params))
 
         conn = put("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => "#{updated_value}"})
 
         assert conn.status == 303
         assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}/\#{#{ctx.singular}.id}"]
-        assert to_string(Repo.get!(Fractal.#{ctx.camel}, #{ctx.singular}.id).#{first_field}) == "#{updated_value}"
+        assert to_string(Repo.get!(#{ctx.schema}, #{ctx.singular}.id).#{first_field}) == "#{updated_value}"
       end
 
       test "PUT #{ctx.route}/:id with invalid params re-renders the edit form with errors" do
         {:ok, #{ctx.singular}} =
-          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+          Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, @valid_params))
 
         conn = put("#{ctx.route}/\#{#{ctx.singular}.id}", %{"#{first_field}" => ""})
 
         assert conn.status == 200
         assert conn.resp_body =~ "can&#39;t be blank"
-        assert to_string(Repo.get!(Fractal.#{ctx.camel}, #{ctx.singular}.id).#{first_field}) == "#{first_value}"
+        assert to_string(Repo.get!(#{ctx.schema}, #{ctx.singular}.id).#{first_field}) == "#{first_value}"
       end
 
       test "DELETE #{ctx.route}/:id destroys the #{ctx.human_downcase} and redirects to the index" do
         {:ok, #{ctx.singular}} =
-          Repo.insert(Fractal.#{ctx.camel}.changeset(%Fractal.#{ctx.camel}{}, @valid_params))
+          Repo.insert(#{ctx.schema}.changeset(%#{ctx.schema}{}, @valid_params))
 
         conn = delete("#{ctx.route}/\#{#{ctx.singular}.id}")
 
         assert conn.status == 303
         assert Plug.Conn.get_resp_header(conn, "location") == ["#{ctx.route}"]
-        assert Repo.get(Fractal.#{ctx.camel}, #{ctx.singular}.id) == nil
+        assert Repo.get(#{ctx.schema}, #{ctx.singular}.id) == nil
       end
     end
     """
