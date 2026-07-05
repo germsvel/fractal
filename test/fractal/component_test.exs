@@ -28,6 +28,25 @@ defmodule Fractal.ComponentTest do
       assert html =~ ~s(<span class="badge">Hi &lt;b&gt;</span>)
     end
 
+    test "carries data-source provenance in dev only" do
+      original = Application.get_env(:fractal, :live_reload)
+
+      on_exit(fn ->
+        if original == nil do
+          Application.delete_env(:fractal, :live_reload)
+        else
+          Application.put_env(:fractal, :live_reload, original)
+        end
+      end)
+
+      Application.put_env(:fractal, :live_reload, true)
+
+      html = Badge |> component(label: "x") |> HTML.safe_to_string()
+
+      assert html =~
+               ~s(data-component="badge" data-source="test/fractal/component_test.exs")
+    end
+
     test "accepts maps or keywords" do
       from_map = Badge |> component(%{label: "x"}) |> HTML.safe_to_string()
       from_kw = Badge |> component(label: "x") |> HTML.safe_to_string()

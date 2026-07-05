@@ -144,16 +144,16 @@ touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
 
-- [ ] In dev, pick mode outlines and selects any element; the panel
+- [x] In dev, pick mode outlines and selects any element; the panel
   composes a prompt containing the element's HTML, the page/component/
   layout source paths, the route, and the typed instruction; Copy puts
   it on the clipboard — demonstrated live in `examples/blog`.
-- [ ] Pasting the composed prompt into a fresh agent session is enough
+- [x] Pasting the composed prompt into a fresh agent session is enough
   for it to locate and edit the right code with no additional
   searching context (demonstrated: prompt names the exact files).
-- [ ] Prod documents contain no annotations and no dev-bar script;
+- [x] Prod documents contain no annotations and no dev-bar script;
   dev documents contain both — asserted by tests.
-- [ ] Pick mode does not trigger fx events; the dev bar's own DOM is
+- [x] Pick mode does not trigger fx events; the dev bar's own DOM is
   unselectable and style-isolated.
-- [ ] Framework suite and blog suite + verify stay green; guide and
+- [x] Framework suite and blog suite + verify stay green; guide and
   README template updated.

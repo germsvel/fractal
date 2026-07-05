@@ -10,8 +10,10 @@ defmodule Fractal.Document do
   upgradable — apps never copy or edit it: the doctype/head/body
   envelope, charset and viewport, the CSRF token meta tag, the
   fingerprinted stylesheet link, the `data-page` attribute that scopes
-  page styles, flash rendering, the interactivity runtime, and (in dev)
-  the live-reload script.
+  page styles, flash rendering, the interactivity runtime, and (in dev
+  only) the live-reload script, source-provenance annotations (a
+  `fractal-source` meta for the page, `data-source` on component and
+  layout wrappers), and the dev bar (see `Fractal.DevBar`).
 
   Apps influence the document through `Fractal.Layout` — data and safe
   HTML in, framework renders and escapes: `site/0` supplies the
@@ -74,6 +76,7 @@ defmodule Fractal.Document do
       "\">\n",
       theme_color(site),
       favicon(site),
+      dev_source_meta(opts[:page]),
       head_meta(title, site, opts[:meta]),
       "<title>",
       HTML.escape(compose_title(title, site[:name])),
@@ -88,6 +91,7 @@ defmodule Fractal.Document do
       HTML.to_safe(body).content,
       "</main>\n",
       Fractal.Interactive.runtime_js(),
+      dev_bar_script(),
       live_reload_script(),
       "</body>\n</html>\n"
     ])
@@ -188,10 +192,39 @@ defmodule Fractal.Document do
         ""
 
       content ->
-        HTML.tag(:div, ["data-layout": true, style: "display: contents"], [
-          HTML.to_safe(content)
-        ]).content
+        attrs =
+          ["data-layout": true] ++
+            dev_source_attr(Layout.module()) ++ [style: "display: contents"]
+
+        HTML.tag(:div, attrs, [HTML.to_safe(content)]).content
     end
+  end
+
+  # dev-only provenance: where this page's source lives, for the dev
+  # bar's composed prompts (and anyone inspecting the document)
+  defp dev_source_meta(page) do
+    with true <- Fractal.DevBar.enabled?(),
+         source when is_binary(source) <- page && Fractal.DevBar.source_path(page) do
+      ["<meta name=\"fractal-source\" content=\"", HTML.escape(source), "\">\n"]
+    else
+      _prod_or_unknown -> ""
+    end
+  end
+
+  @doc false
+  # dev-only data-source attribute for scope wrappers (components, the
+  # layout chrome); [] in prod
+  def dev_source_attr(module) do
+    with true <- Fractal.DevBar.enabled?(),
+         source when is_binary(source) <- module && Fractal.DevBar.source_path(module) do
+      ["data-source": source]
+    else
+      _prod_or_unknown -> []
+    end
+  end
+
+  defp dev_bar_script do
+    if Fractal.DevBar.enabled?(), do: Fractal.DevBar.script(), else: ""
   end
 
   defp page_attr(nil), do: ""

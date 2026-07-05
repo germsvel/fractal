@@ -9,7 +9,7 @@ working **in** a Fractal app get their own `AGENTS.md` from
 
 | Path | What |
 | --- | --- |
-| `lib/fractal/` | The framework: page/router/document/verify/checkpoint/invariant/layout/component/assets/bus/test |
+| `lib/fractal/` | The framework: page/router/document/verify/checkpoint/invariant/layout/component/assets/bus/dev_bar/test |
 | `lib/mix/tasks/` | `fractal.server`, `fractal.verify`, `fractal.ai.docs`, the `fractal.gen.*` generators |
 | `priv/guides/` | The guides `mix fractal.ai.docs` ships into every app — update them with behavior changes |
 | `test/` | Framework tests, mirroring `lib/`; DB-less and Postgres-free |

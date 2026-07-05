@@ -92,11 +92,11 @@ defmodule Fractal.Component do
   """
   @spec component(module(), map() | keyword()) :: HTML.Safe.t()
   def component(module, assigns \\ []) do
-    HTML.tag(
-      :div,
-      ["data-component": slug(module), style: "display: contents"],
-      [HTML.to_safe(module.render(Map.new(assigns)))]
-    )
+    attrs =
+      ["data-component": slug(module)] ++
+        Fractal.Document.dev_source_attr(module) ++ [style: "display: contents"]
+
+    HTML.tag(:div, attrs, [HTML.to_safe(module.render(Map.new(assigns)))])
   end
 
   @doc "All discovered components, sorted by name."

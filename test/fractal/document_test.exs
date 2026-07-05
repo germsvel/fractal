@@ -165,6 +165,58 @@ defmodule Fractal.DocumentTest do
     refute Document.shell("t", "b") =~ "class=\"flash"
   end
 
+  describe "dev-only provenance and the dev bar" do
+    setup do
+      original = Application.get_env(:fractal, :live_reload)
+
+      on_exit(fn ->
+        if original == nil do
+          Application.delete_env(:fractal, :live_reload)
+        else
+          Application.put_env(:fractal, :live_reload, original)
+        end
+      end)
+
+      :ok
+    end
+
+    @assigns %{params: %{}, session: %{}, context: %{}, path: "/fixtures", conn: nil}
+
+    test "dev documents carry the page source meta and the dev bar" do
+      Application.put_env(:fractal, :live_reload, true)
+
+      html = Document.render(Fractal.Fixtures.StaticPage, @assigns)
+
+      assert html =~
+               ~s(<meta name="fractal-source" content="test/support/fixtures.ex">)
+
+      assert html =~ "fractal-dev-bar"
+    end
+
+    test "the layout chrome carries data-source in dev" do
+      Application.put_env(:fractal, :live_reload, true)
+
+      signed_in = %{@assigns | session: %{"fixture_user" => "Ada"}}
+      html = Document.shell("t", "b", assigns: signed_in)
+
+      assert html =~
+               ~s(<div data-layout data-source="test/support/fixtures.ex" style="display: contents">)
+    end
+
+    test "prod documents carry none of it" do
+      html = Document.render(Fractal.Fixtures.StaticPage, @assigns)
+
+      refute html =~ "fractal-source"
+      refute html =~ "fractal-dev-bar"
+      refute html =~ "data-source"
+
+      signed_in = %{@assigns | session: %{"fixture_user" => "Ada"}}
+
+      assert Document.shell("t", "b", assigns: signed_in) =~
+               ~s(<div data-layout style="display: contents">)
+    end
+  end
+
   test "the layout's style/0 lands in the bundle, scoped under data-layout" do
     {_hash, css} = Fractal.Assets.css_bundle()
 

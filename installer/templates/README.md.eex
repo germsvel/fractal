@@ -31,6 +31,11 @@ After each change the agent runs `mix fractal.verify` — pages render,
 routes are unique, styles are scoped, forms carry CSRF tokens, every
 page has tests, and the app's invariants hold. If it's green, it works.
 
+For smaller tweaks, use the **dev bar** in the browser: click "select
+element" (bottom-right on any dev page), pick one devtools-style, type
+what should change, and copy the composed prompt — it names the exact
+files, so any agent lands on the right code without searching.
+
 ## Where things live
 
 | Path | What |

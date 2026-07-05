@@ -98,6 +98,15 @@ With `mix fractal.server` running in dev, saving any `.ex` file recompiles
 the project and open browser tabs reload automatically — new pages appear
 without restarting anything.
 
+Dev pages also carry a small **dev bar** (bottom-right). Click "select
+element", hover to outline any element devtools-style, click it, and type what
+should change: the panel composes a ready-to-paste prompt carrying the
+element's HTML, the exact source files (page, components, layout — from
+dev-only provenance annotations), the route, and your instruction. Copy
+it into whatever agent is running in your terminal; live reload shows
+the result when the agent finishes. None of this — the bar or the
+annotations — exists outside dev.
+
 ## After every change
 
 Run `mix fractal.verify`. It compiles with warnings as errors, checks all
