@@ -117,6 +117,27 @@ defmodule Fractal.Fixtures do
     end
   end
 
+  defmodule MetaPage do
+    @moduledoc false
+    use Fractal.Page, path: "/fixtures/meta", title: "Meta"
+
+    @impl Fractal.Page
+    def meta(_assigns) do
+      %{
+        description: "A page about <b>fixtures</b>",
+        canonical: "/fixtures/meta",
+        robots: "noindex",
+        og: %{title: "Meta fixture", type: "article", image: asset_path("logo.svg")},
+        extra: [{:link, [rel: "alternate", type: "application/rss+xml", href: "/feed"]}]
+      }
+    end
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      tag(:section, [], [tag(:h1, [], ["Meta"])])
+    end
+  end
+
   defmodule EventPage do
     @moduledoc false
     use Fractal.Page, path: "/fixtures/ping", title: "Ping", events: ["ping", "reset"]

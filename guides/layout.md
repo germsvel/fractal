@@ -63,9 +63,47 @@ The rules:
   knows nothing about them.
 - A page title equal to the site name is not composed (the home page
   reads `<title>My App</title>`, not `My App — My App`).
-- Per-page head data (descriptions, og tags, canonical URLs) is a
-  separate, page-level channel — see the roadmap; app-wide data lives
-  here.
+- Per-page head data (descriptions, og tags, canonical URLs) is the
+  page's own channel — `meta/1`, below; app-wide data lives here.
+
+## Per-page head data: meta/1
+
+Pages appear in search results and link previews through `meta/1` —
+head *data* computed from the same assigns as `render/1`. Pages never
+write head markup; the framework renders and escapes:
+
+```elixir
+@impl Fractal.Page
+def meta(assigns) do
+  post = fetch(assigns.params["id"])
+
+  %{
+    description: excerpt(post.body),          # overrides the site default
+    canonical: "/posts/#{post.id}",
+    og: %{title: post.title, type: "article", image: asset_path("cover.png")},
+    extra: [{:link, [rel: "alternate", type: "application/rss+xml", href: "/feed"]}]
+  }
+end
+```
+
+- Known keys: `:description` (falls back to the layout's site
+  description — so every page has one by default), `:canonical`,
+  `:robots`, and `:og`. The og block renders only when `:og` is
+  present; missing subkeys default sensibly (og:title from the page
+  title, og:description from the description, og:site_name from the
+  site name, plus a matching `twitter:card`).
+- `:extra` is the bounded generic tail — `{:meta, attrs}` and
+  `{:link, attrs}` entries only (RSS discovery, site verification).
+  Data, never markup: attributes are escaped, event-handler (`on*`)
+  attributes are rejected, and external `link` hrefs need a reference
+  rel (`canonical`, `alternate`, ...) — resource-loading rels must be
+  vendored, same as everywhere.
+- Like `render/1`, `meta/1` must tolerate empty assigns —
+  verification smoke-runs it and fails misshapen data, unknown keys,
+  crashing callbacks, and missing `asset_path/1` references, naming
+  the page.
+- House rule (an invariant, listed in `mix fractal.ai.docs`): a meta
+  description fits a search snippet (≤ 160 chars).
 
 ## Verification
 

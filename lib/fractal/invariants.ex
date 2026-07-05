@@ -19,6 +19,22 @@ defmodule Fractal.Invariants do
     end
   end
 
+  invariant "meta description fits a search snippet", %{meta: meta} do
+    case meta[:description] do
+      nil ->
+        :ok
+
+      description ->
+        length = String.length(description)
+
+        if length <= 160 do
+          :ok
+        else
+          {:error, "meta description is #{length} chars — keep it under 160"}
+        end
+    end
+  end
+
   # one h1 per page: screen readers and scanners rely on it
   invariant "every page renders exactly one h1", %{rendered: rendered} do
     case rendered |> String.split("<h1") |> length() |> Kernel.-(1) do

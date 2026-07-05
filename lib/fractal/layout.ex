@@ -45,7 +45,9 @@ defmodule Fractal.Layout do
       the plain document.
     * `site/0` returns data — the framework composes and escapes it.
       Keys: `:name`, `:lang` (default `"en"`), `:favicon` (use
-      `asset_path/1`, so missing files fail verify), `:theme_color`.
+      `asset_path/1`, so missing files fail verify), `:theme_color`,
+      and `:description` (the app-wide default meta description; a
+      page's `meta/1` description overrides it).
     * `chrome/1` receives the usual assigns (session, context, path)
       and returns safe HTML (or `nil` to render nothing); it must
       tolerate empty assigns and goes through the same verification

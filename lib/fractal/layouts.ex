@@ -15,7 +15,8 @@ defmodule Fractal.Layouts do
       name: "Fractal",
       lang: "en",
       favicon: asset_path("logo.svg"),
-      theme_color: "#0b1021"
+      theme_color: "#0b1021",
+      description: "An AI-first web framework written in Elixir."
     }
   end
 

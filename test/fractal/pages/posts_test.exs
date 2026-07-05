@@ -68,6 +68,20 @@ defmodule Fractal.Pages.PostsTest do
     assert conn.resp_body =~ "not found"
   end
 
+  test "GET /posts/:id renders the post's head data over the site defaults" do
+    {:ok, post} =
+      Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))
+
+    conn = get("/posts/#{post.id}")
+
+    assert conn.resp_body =~ ~s(<meta name="description" content="some longer value 2">)
+    assert conn.resp_body =~ ~s(<link rel="canonical" href="/posts/#{post.id}">)
+    assert conn.resp_body =~ ~s(<meta property="og:title" content="some value 1">)
+    assert conn.resp_body =~ ~s(<meta property="og:type" content="article">)
+    # the page's description replaced the app-wide default
+    refute conn.resp_body =~ "AI-first web framework written in Elixir"
+  end
+
   test "GET /posts/:id shows the delete button" do
     {:ok, post} =
       Repo.insert(Fractal.Post.changeset(%Fractal.Post{}, @valid_params))

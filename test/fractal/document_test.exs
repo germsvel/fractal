@@ -93,6 +93,55 @@ defmodule Fractal.DocumentTest do
     refute Document.shell("t", "b") =~ ~s(class="session-bar")
   end
 
+  test "every page gets the site's default description" do
+    assert Document.shell("t", "b") =~
+             ~s(<meta name="description" content="#{@site.description}">)
+  end
+
+  test "page meta/1 renders into the head, escaped, over site defaults" do
+    html =
+      Document.render(Fractal.Fixtures.MetaPage, %{
+        params: %{},
+        session: %{},
+        context: %{},
+        path: "/fixtures/meta",
+        conn: nil
+      })
+
+    # page description overrides the site default, escaped
+    assert html =~
+             ~s(<meta name="description" content="A page about &lt;b&gt;fixtures&lt;/b&gt;">)
+
+    refute html =~ ~s(content="#{@site.description}")
+
+    assert html =~ ~s(<link rel="canonical" href="/fixtures/meta">)
+    assert html =~ ~s(<meta name="robots" content="noindex">)
+
+    # og block with defaults filled in
+    assert html =~ ~s(<meta property="og:title" content="Meta fixture">)
+    assert html =~ ~s(<meta property="og:site_name" content="#{@site.name}">)
+    assert html =~ ~s(<meta property="og:type" content="article">)
+    assert html =~ ~r{<meta property="og:image" content="/assets/logo\.svg\?vsn=[0-9a-f]+">}
+    assert html =~ ~s(<meta name="twitter:card" content="summary_large_image">)
+
+    # the generic tail renders as data
+    assert html =~ ~s(<link rel="alternate" type="application/rss+xml" href="/feed">)
+  end
+
+  test "pages without meta/1 render no og block or canonical" do
+    html =
+      Document.render(Fractal.Fixtures.StaticPage, %{
+        params: %{},
+        session: %{},
+        context: %{},
+        path: "/fixtures",
+        conn: nil
+      })
+
+    refute html =~ "og:title"
+    refute html =~ ~s(rel="canonical")
+  end
+
   test "renders flash banners, escaped" do
     html = Document.shell("t", "b", flash: %{"info" => "Saved <b>!</b>"})
 

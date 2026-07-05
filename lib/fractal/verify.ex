@@ -263,7 +263,7 @@ defmodule Fractal.Verify do
   defp validate_site do
     site = Fractal.Layout.site()
 
-    string_keys = [:name, :lang, :favicon, :theme_color]
+    string_keys = [:name, :lang, :favicon, :theme_color, :description]
 
     invalid =
       Enum.filter(string_keys, fn key ->
@@ -516,6 +516,7 @@ defmodule Fractal.Verify do
       [
         {"#{inspect(page)} handles its events", validate_events(page)},
         {"#{inspect(page)} requires defined guards", validate_requires(page)},
+        {"#{inspect(page)} declares valid meta", validate_meta(page)},
         {"#{inspect(page)} declares valid styles", validate_style(page)},
         {"#{inspect(page)} renders", validate_render(page)}
       ]
@@ -524,7 +525,7 @@ defmodule Fractal.Verify do
   defp invariant_checks(page, names) do
     case smoke_render(page) do
       {:ok, rendered} ->
-        context = %{page: page, rendered: rendered}
+        context = %{page: page, rendered: rendered, meta: smoke_meta(page)}
 
         for name <- names do
           {"#{inspect(page)} satisfies invariant '#{name}'", run_invariant(name, context)}
@@ -721,6 +722,113 @@ defmodule Fractal.Verify do
     exception -> {:error, "rendering the example raised: #{Exception.message(exception)}"}
   end
 
+  @meta_keys [:description, :canonical, :robots, :og, :extra]
+  @og_keys [:title, :description, :image, :url, :type]
+
+  defp validate_meta(page) do
+    if function_exported?(page, :meta, 1) do
+      page |> Page.meta(smoke_assigns(page)) |> validate_meta_shape()
+    else
+      :ok
+    end
+  rescue
+    exception -> {:error, "meta/1 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_meta_shape(meta) when not is_map(meta) do
+    {:error, "meta/1 must return a map, got: #{inspect(meta)}"}
+  end
+
+  defp validate_meta_shape(meta) do
+    with :ok <- validate_meta_keys(meta),
+         :ok <- validate_meta_strings(meta),
+         :ok <- validate_og(meta[:og]) do
+      validate_extra(meta[:extra])
+    end
+  end
+
+  defp validate_meta_keys(meta) do
+    case Map.keys(meta) -- @meta_keys do
+      [] ->
+        :ok
+
+      unknown ->
+        {:error, "unknown meta key(s) #{inspect(unknown)} — allowed: #{inspect(@meta_keys)}"}
+    end
+  end
+
+  defp validate_meta_strings(meta) do
+    invalid =
+      Enum.filter([:description, :canonical, :robots], fn key ->
+        Map.has_key?(meta, key) and not is_binary(meta[key]) and not is_nil(meta[key])
+      end)
+
+    case invalid do
+      [] -> :ok
+      invalid -> {:error, "meta values must be strings — invalid: #{inspect(invalid)}"}
+    end
+  end
+
+  defp validate_og(nil), do: :ok
+
+  defp validate_og(og) when is_map(og) do
+    cond do
+      Map.keys(og) -- @og_keys != [] ->
+        {:error,
+         "unknown og key(s) #{inspect(Map.keys(og) -- @og_keys)} — allowed: #{inspect(@og_keys)}"}
+
+      Enum.any?(og, fn {_key, value} -> not is_binary(value) and not is_nil(value) end) ->
+        {:error, "og values must be strings"}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_og(other), do: {:error, "meta :og must be a map, got: #{inspect(other)}"}
+
+  defp validate_extra(nil), do: :ok
+
+  defp validate_extra(entries) when is_list(entries) do
+    Enum.find_value(entries, :ok, fn
+      {tag_name, attrs} when tag_name in [:meta, :link] and is_list(attrs) ->
+        validate_extra_attrs(tag_name, attrs)
+
+      other ->
+        {:error,
+         "meta :extra entries must be {:meta, attrs} or {:link, attrs}, got: #{inspect(other)}"}
+    end)
+  end
+
+  defp validate_extra(other), do: {:error, "meta :extra must be a list, got: #{inspect(other)}"}
+
+  defp validate_extra_attrs(tag_name, attrs) do
+    attrs_map = Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
+
+    cond do
+      Enum.any?(Map.keys(attrs_map), &String.starts_with?(String.downcase(&1), "on")) ->
+        {:error, "meta :extra entries cannot carry event-handler (on*) attributes"}
+
+      tag_name == :link and external_url?(attrs_map["href"]) and
+          not reference_rel?(to_string(attrs_map["rel"] || "")) ->
+        {:error,
+         "meta :extra link to an external origin needs a reference rel " <>
+           "(#{Enum.join(reference_rels(), ", ")}) — resource-loading rels must be vendored"}
+
+      true ->
+        nil
+    end
+  end
+
+  defp smoke_meta(page) do
+    case Page.meta(page, smoke_assigns(page)) do
+      meta when is_map(meta) -> meta
+      _other -> %{}
+    end
+  rescue
+    _exception -> %{}
+  end
+
   # works for pages and components alike: both optionally export style/0
   defp validate_style(page) do
     case Page.style(page) do
@@ -779,14 +887,46 @@ defmodule Fractal.Verify do
   end
 
   # agents love pasting CDN <script>/<link> lines; the framework owns
-  # the client, so external code never loads from third-party origins
+  # the client, so external code never loads from third-party origins.
+  # Reference links (rel=canonical/alternate/...) carry content URLs,
+  # not resource loads — those are fine.
+  @reference_rels ~w(canonical alternate me author license help next prev search)
+
+  defp reference_rels, do: @reference_rels
+
+  defp reference_rel?(rel) do
+    rel |> String.downcase() |> String.split() |> Enum.all?(&(&1 in @reference_rels)) and
+      rel != ""
+  end
+
+  defp external_url?(nil), do: false
+  defp external_url?(url), do: Regex.match?(~r{^(https?:)?//}, to_string(url))
+
   defp scan_external_refs(html) do
-    if Regex.match?(~r/<(script|link)[^>]+(src|href)="(https?:)?\/\//i, html) do
+    external_script? = Regex.match?(~r/<script\b[^>]*\bsrc="(https?:)?\/\//i, html)
+
+    external_resource_link? =
+      ~r/<link\b[^>]*>/i
+      |> Regex.scan(html)
+      |> Enum.any?(fn [link_tag] ->
+        Regex.match?(~r/\bhref="(https?:)?\/\//i, link_tag) and
+          not reference_rel?(link_rel(link_tag))
+      end)
+
+    if external_script? or external_resource_link? do
       {:error,
        "references an external script or stylesheet — Fractal owns the client; " <>
-         "vendor files into assets/static/ and reference them with asset_path/1"}
+         "vendor files into assets/static/ and reference them with asset_path/1 " <>
+         "(reference links like rel=\"canonical\" are allowed)"}
     else
       :ok
+    end
+  end
+
+  defp link_rel(link_tag) do
+    case Regex.run(~r/\brel="([^"]*)"/i, link_tag) do
+      [_, rel] -> rel
+      nil -> ""
     end
   end
 

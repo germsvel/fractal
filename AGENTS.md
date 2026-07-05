@@ -15,7 +15,9 @@ so purely with AI — so this file is the contract for how agents work here.
   module (`lib/fractal/layouts.ex`, `use Fractal.Layout`) supplies
   `site/0` (name, lang, favicon, theme color) and `chrome/1` (nav /
   session bar above `<main>`) — data and safe HTML in, framework
-  renders. Never ask for an app-owned root template or `<head>` markup;
+  renders. Per-page head data (description, og tags, canonical) is the
+  page's `meta/1` callback — data only; descriptions must fit a search
+  snippet. Never ask for an app-owned root template or `<head>` markup;
   there isn't one. See `guides/layout.md`.
 - A page that renders a form also **handles the submission in the same
   file**: `use Fractal.Page, path: "/posts/new", post: "/posts"` plus

@@ -183,6 +183,13 @@ defmodule Fractal.PageTest do
     assert Fractal.Page.slug(Styled) == "styled"
   end
 
+  test "meta/2 returns the page's head data or an empty map" do
+    assert Fractal.Page.meta(Sample, %{params: %{}}) == %{}
+
+    assert Fractal.Page.meta(Fractal.Fixtures.MetaPage, %{params: %{}})[:canonical] ==
+             "/fixtures/meta"
+  end
+
   test "style/1 returns the page's CSS or nil" do
     assert Fractal.Page.style(Styled) == "h1 { color: red; }"
     assert Fractal.Page.style(Sample) == nil

@@ -362,6 +362,97 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: "x"
   end
 
+  defmodule MisshapenMetaPage do
+    use Fractal.Page, path: "/verify-misshapen-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: [:not, :a, :map]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule UnknownMetaKeyPage do
+    use Fractal.Page, path: "/verify-unknown-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: %{descripton: "a typo"}
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule CrashingMetaPage do
+    use Fractal.Page, path: "/verify-crashing-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: raise("meta boom")
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule MissingOgImagePage do
+    use Fractal.Page, path: "/verify-missing-og-image"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: %{og: %{image: asset_path("no-such-cover.png")}}
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule HandlerAttrMetaPage do
+    use Fractal.Page, path: "/verify-handler-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: %{extra: [{:meta, [name: "x", onload: "evil()"]}]}
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule ScriptExtraMetaPage do
+    use Fractal.Page, path: "/verify-script-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: %{extra: [{:script, [src: "/x.js"]}]}
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule ExternalStylesheetMetaPage do
+    use Fractal.Page, path: "/verify-external-stylesheet-meta"
+
+    @impl Fractal.Page
+    def meta(_assigns) do
+      %{extra: [{:link, [rel: "stylesheet", href: "https://cdn.example.com/x.css"]}]}
+    end
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule LongDescriptionPage do
+    use Fractal.Page, path: "/verify-long-description"
+
+    @impl Fractal.Page
+    def meta(_assigns), do: %{description: String.duplicate("wordy ", 40)}
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:h1, [], ["x"])
+  end
+
+  defmodule CanonicalLinkPage do
+    use Fractal.Page, path: "/verify-canonical-link"
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      raw(~s(<h1>x</h1><link rel="canonical" href="https://example.com/here">))
+    end
+  end
+
   defmodule LongTitlePage do
     use Fractal.Page,
       path: "/verify-long-title",
@@ -526,6 +617,59 @@ defmodule Fractal.VerifyTest do
     test "unused_guards/0 only reports guards nothing uses" do
       # :signed_in is required by the admin page and expected under /admin
       refute :signed_in in Verify.unused_guards()
+    end
+  end
+
+  describe "meta" do
+    test "a well-formed meta/1 passes" do
+      assert Verify.ok?(Verify.run([Fractal.Fixtures.MetaPage]))
+    end
+
+    test "misshapen, unknown-key, and crashing meta/1 fail, naming the page" do
+      assert [{name, {:error, message}}] = Verify.errors(Verify.run([MisshapenMetaPage]))
+      assert name =~ "declares valid meta"
+      assert message =~ "must return a map"
+
+      assert [{_name, {:error, message}}] = Verify.errors(Verify.run([UnknownMetaKeyPage]))
+      assert message =~ ":descripton"
+      assert message =~ "allowed:"
+
+      assert [{_name, {:error, message}}] = Verify.errors(Verify.run([CrashingMetaPage]))
+      assert message =~ "meta/1 raised"
+      assert message =~ "meta boom"
+    end
+
+    test "a missing og image asset fails via the smoke-run" do
+      assert [{_name, {:error, message}}] = Verify.errors(Verify.run([MissingOgImagePage]))
+      assert message =~ "no-such-cover.png"
+    end
+
+    test "script-shaped generic entries are rejected" do
+      assert [{_name, {:error, message}}] = Verify.errors(Verify.run([HandlerAttrMetaPage]))
+      assert message =~ "event-handler"
+
+      assert [{_name, {:error, message}}] = Verify.errors(Verify.run([ScriptExtraMetaPage]))
+      assert message =~ "{:meta, attrs} or {:link, attrs}"
+
+      assert [{_name, {:error, message}}] =
+               Verify.errors(Verify.run([ExternalStylesheetMetaPage]))
+
+      assert message =~ "reference rel"
+    end
+
+    test "external canonical links pass the refined origin rule; resources still fail" do
+      assert Verify.ok?(Verify.run([CanonicalLinkPage]))
+
+      # external script and stylesheet loading still fail (existing fixtures)
+      refute Verify.ok?(Verify.run([CdnPage]))
+    end
+
+    test "the description invariant catches over-long descriptions" do
+      errors = Verify.errors(Verify.run_invariants([LongDescriptionPage]))
+
+      assert Enum.any?(errors, fn {name, {:error, message}} ->
+               name =~ "search snippet" and message =~ "keep it under 160"
+             end)
     end
   end
 

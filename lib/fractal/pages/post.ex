@@ -9,6 +9,21 @@ defmodule Fractal.Pages.Post do
   alias Fractal.Repo
 
   @impl Fractal.Page
+  def meta(assigns) do
+    case fetch(assigns.params["id"]) do
+      nil ->
+        %{}
+
+      post ->
+        %{
+          description: excerpt(post.body),
+          canonical: "/posts/#{post.id}",
+          og: %{title: to_string(post.title), type: "article"}
+        }
+    end
+  end
+
+  @impl Fractal.Page
   def render(assigns) do
     case fetch(assigns.params["id"]) do
       nil ->
@@ -55,4 +70,9 @@ defmodule Fractal.Pages.Post do
   end
 
   defp fetch(_id), do: nil
+
+  defp excerpt(body) do
+    body = to_string(body)
+    if String.length(body) > 150, do: String.slice(body, 0, 147) <> "...", else: body
+  end
 end

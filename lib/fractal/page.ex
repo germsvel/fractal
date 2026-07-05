@@ -62,6 +62,31 @@ defmodule Fractal.Page do
   or `mix fractal.ai.docs` for the existing vocabulary before creating
   one. See `Fractal.Component`.
 
+  ## Head data
+
+  A page optionally implements `meta/1` — its search/link-preview data,
+  computed from the same assigns as `render/1`. Data in, framework
+  renders and escapes into the `<head>`; pages never write head markup:
+
+      @impl Fractal.Page
+      def meta(assigns) do
+        %{
+          description: excerpt(assigns.params["id"]),
+          canonical: "/posts/\#{assigns.params["id"]}",
+          og: %{title: "My post", image: asset_path("cover.png")},
+          extra: [{:link, [rel: "alternate", type: "application/rss+xml", href: "/feed"]}]
+        }
+      end
+
+  Known keys: `:description` (falls back to the layout's site
+  description), `:canonical`, `:robots`, `:og` (title/description/
+  image/url/type — og tags render only when `:og` is present; missing
+  subkeys get sensible defaults), and `:extra` (a bounded generic tail
+  of `{:meta, attrs}`/`{:link, attrs}` entries — data, never markup;
+  script-shaped entries are rejected by verification). Like `render/1`,
+  `meta/1` must tolerate empty assigns. There is no `meta:` option on
+  `use Fractal.Page` — a static map is a one-line callback.
+
   Each action option keeps a form and the action it submits to in one
   file. Declaring an action route without defining its handler (or vice
   versa) is a compile-time error — the same goes for `:events` and
@@ -163,6 +188,7 @@ defmodule Fractal.Page do
   @callback events() :: [String.t()]
   @callback style() :: String.t()
   @callback requires() :: [atom()]
+  @callback meta(assigns :: map()) :: map()
   @callback render(assigns :: map()) :: Fractal.HTML.Safe.t() | iodata()
   @callback handle_post(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
   @callback handle_put(assigns :: map()) :: {:redirect, String.t()} | {:render, map()}
@@ -176,6 +202,7 @@ defmodule Fractal.Page do
                       events: 0,
                       style: 0,
                       requires: 0,
+                      meta: 1,
                       handle_post: 1,
                       handle_put: 1,
                       handle_delete: 1,
@@ -361,6 +388,12 @@ defmodule Fractal.Page do
   @spec requires(module()) :: [atom()]
   def requires(module) do
     if function_exported?(module, :requires, 0), do: module.requires(), else: []
+  end
+
+  @doc "Returns the page's `meta/1` head data for `assigns`, or `%{}`."
+  @spec meta(module(), map()) :: map()
+  def meta(module, assigns) do
+    if function_exported?(module, :meta, 1), do: module.meta(assigns), else: %{}
   end
 
   @doc "Returns the page's `style/0` CSS, or `nil` (works for any page)."
