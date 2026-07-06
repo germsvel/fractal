@@ -22,41 +22,20 @@ defmodule Fractal.MixProject do
     ]
   end
 
-  # Deps are pinned to git tags rather than hex packages because this
-  # sandbox's TLS-intercepting proxy is incompatible with Erlang's TLS
-  # stack (hex.pm is unreachable from Erlang). Same packages, same
-  # versions; the transitive deps must be spelled out with override: true
-  # since there is no hex resolver to fetch them.
+  # Direct dependencies only — modules the framework calls (Plug/Bandit
+  # for transport, Ecto/Postgrex for data, FileSystem for live reload,
+  # Phoenix.PubSub for watch fan-out, :telemetry for events). Hex
+  # resolves the transitive tree.
   defp deps do
     [
-      {:bandit, git: "https://github.com/mtrudel/bandit.git", tag: "1.12.0", override: true},
-      {:plug, git: "https://github.com/elixir-plug/plug.git", tag: "v1.20.1", override: true},
-      {:file_system, git: "https://github.com/falood/file_system.git", tag: "v1.1.1"},
-      {:thousand_island,
-       git: "https://github.com/mtrudel/thousand_island.git", tag: "1.5.0", override: true},
-      {:plug_crypto,
-       git: "https://github.com/elixir-plug/plug_crypto.git", tag: "v2.1.1", override: true},
-      {:mime, git: "https://github.com/elixir-plug/mime.git", tag: "v2.0.7", override: true},
-      {:websock,
-       git: "https://github.com/phoenixframework/websock.git", tag: "0.5.3", override: true},
-      {:websock_adapter,
-       git: "https://github.com/phoenixframework/websock_adapter.git",
-       tag: "0.6.0",
-       override: true},
-      {:hpax, git: "https://github.com/elixir-mint/hpax.git", tag: "v1.0.3", override: true},
-      {:telemetry,
-       git: "https://github.com/beam-telemetry/telemetry.git", tag: "v1.4.2", override: true},
-      {:phoenix_pubsub,
-       git: "https://github.com/phoenixframework/phoenix_pubsub.git",
-       tag: "v2.1.3",
-       override: true},
-      {:ecto_sql, git: "https://github.com/elixir-ecto/ecto_sql.git", tag: "v3.14.0"},
-      {:ecto, git: "https://github.com/elixir-ecto/ecto.git", tag: "v3.14.0", override: true},
-      {:postgrex,
-       git: "https://github.com/elixir-ecto/postgrex.git", tag: "v0.22.2", override: true},
-      {:db_connection,
-       git: "https://github.com/elixir-ecto/db_connection.git", tag: "v2.10.1", override: true},
-      {:decimal, git: "https://github.com/ericmj/decimal.git", tag: "v3.1.1", override: true}
+      {:bandit, "~> 1.12"},
+      {:plug, "~> 1.20"},
+      {:file_system, "~> 1.1"},
+      {:telemetry, "~> 1.4"},
+      {:phoenix_pubsub, "~> 2.1"},
+      {:ecto, "~> 3.14"},
+      {:ecto_sql, "~> 3.14"},
+      {:postgrex, "~> 0.22"}
     ]
   end
 end
