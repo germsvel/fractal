@@ -5,11 +5,10 @@ defmodule Fractal.Application do
 
   @impl true
   def start(_type, _args) do
-    # The framework's application starts framework services: the watch
-    # bus (server push) and live reload. Repos listed under :fractal's
-    # own ecto_repos also start here — host apps supervise their own.
-    children =
-      Application.get_env(:fractal, :ecto_repos, []) ++ [Fractal.Bus, Fractal.LiveReload]
+    # Framework services only. The framework reads about the host's repo
+    # (Fractal.Discovery.host_repo/0) but never supervises one — host
+    # apps supervise their own.
+    children = [Fractal.Bus, Fractal.LiveReload]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Fractal.Supervisor)
   end
