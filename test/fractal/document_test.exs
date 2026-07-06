@@ -191,6 +191,10 @@ defmodule Fractal.DocumentTest do
                ~s(<meta name="fractal-source" content="test/support/fixtures.ex">)
 
       assert html =~ "fractal-dev-bar"
+
+      # the dev reload client: SSE listener, css swap, error overlay
+      assert html =~ ~s{new EventSource("/fractal/reload")}
+      assert html =~ "fractal-compile-error"
     end
 
     test "the layout chrome carries data-source in dev" do
@@ -209,6 +213,8 @@ defmodule Fractal.DocumentTest do
       refute html =~ "fractal-source"
       refute html =~ "fractal-dev-bar"
       refute html =~ "data-source"
+      refute html =~ "/fractal/reload"
+      refute html =~ "fractal-compile-error"
 
       signed_in = %{@assigns | session: %{"fixture_user" => "Ada"}}
 

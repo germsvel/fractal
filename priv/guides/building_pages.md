@@ -95,8 +95,13 @@ See `guides/forms_and_data.md`.
 ## Development loop
 
 With `mix fractal.server` running in dev, saving any `.ex` file recompiles
-the project and open browser tabs reload automatically — new pages appear
-without restarting anything.
+the project and open browser tabs reload automatically — always onto
+already-compiled code, because the compile happens on save, not on the
+next request. Style-only changes (anything under `assets/`, or a page's
+`style/0` — saved with its `.ex` file) don't lose your place: CSS-only
+edits swap the stylesheet in without a page reload. A failed compile
+overlays the compiler output on the still-working page and clears on
+the next good compile.
 
 Dev pages also carry a small **dev bar** (bottom-right). Click "select
 element", hover to outline any element devtools-style, click it, and type what

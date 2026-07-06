@@ -16,7 +16,7 @@ defmodule Fractal.ResponseHeadersTest do
     # 404s and framework endpoints too
     assert Plug.Conn.get_resp_header(get("/nope"), "x-content-type-options") == ["nosniff"]
 
-    assert Plug.Conn.get_resp_header(get("/fractal/reload"), "x-content-type-options") ==
+    assert Plug.Conn.get_resp_header(get(Fractal.Assets.css_path()), "x-content-type-options") ==
              ["nosniff"]
   end
 

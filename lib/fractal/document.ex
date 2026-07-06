@@ -24,19 +24,53 @@ defmodule Fractal.Document do
 
   alias Fractal.{Assets, HTML, Layout, Page}
 
+  # The dev event stream client. "hello" carries the current token on
+  # (re)connect — a changed token after a reconnect means we missed a
+  # bump (or the server restarted), so reload. "css" swaps the
+  # fingerprinted bundle link in place, preserving page state.
+  # "compile-error" overlays the compiler output on the still-working
+  # page (isolated DOM, styled from JS — same rules as the dev bar).
   @live_reload_script """
   <script>
   (function () {
-    var token = null;
-    setInterval(function () {
-      fetch("/fractal/reload")
-        .then(function (resp) { return resp.json(); })
-        .then(function (data) {
-          if (token === null) { token = data.token; }
-          else if (token !== data.token) { location.reload(); }
-        })
-        .catch(function () {});
-    }, 500);
+    var initial = null;
+    var overlay = null;
+
+    function clearOverlay() {
+      if (overlay) { overlay.remove(); overlay = null; }
+    }
+
+    function showError(message) {
+      clearOverlay();
+      overlay = document.createElement("div");
+      overlay.id = "fractal-compile-error";
+      overlay.style.cssText =
+        "position:fixed;inset:0;z-index:2147483647;background:rgba(11,16,33,0.92);" +
+        "display:flex;align-items:center;justify-content:center;padding:2rem;";
+      var pre = document.createElement("pre");
+      pre.textContent = "Compile failed — the page below still runs the previous code.\\n\\n" + message;
+      pre.style.cssText =
+        "max-width:60rem;max-height:80vh;overflow:auto;background:#0b1021;color:#ff8787;" +
+        "border:1px solid rgba(255,135,135,0.5);border-radius:0.5rem;padding:1.5rem;" +
+        "font-size:13px;white-space:pre-wrap;";
+      overlay.appendChild(pre);
+      overlay.addEventListener("click", clearOverlay);
+      document.body.appendChild(overlay);
+    }
+
+    function swapCss(href) {
+      var link = document.querySelector('link[href^="/fractal/assets/"]');
+      if (link && link.getAttribute("href") !== href) link.setAttribute("href", href);
+    }
+
+    var source = new EventSource("/fractal/reload");
+    source.addEventListener("hello", function (e) {
+      if (initial === null) { initial = e.data; }
+      else if (initial !== e.data) { location.reload(); }
+    });
+    source.addEventListener("reload", function () { location.reload(); });
+    source.addEventListener("css", function (e) { clearOverlay(); swapCss(e.data); });
+    source.addEventListener("compile-error", function (e) { showError(e.data); });
   })();
   </script>
   """

@@ -49,8 +49,13 @@ defmodule Fractal.Router do
   fragment as topics fire — and once on connect, which is what makes a
   reconnect self-healing. The connection holds no application state.
 
-  The router also serves `GET /fractal/reload`, the live-reload token
-  endpoint polled by the script `Fractal.Document` injects in development.
+  The router also serves `GET /fractal/reload` — in development only, a
+  server-sent-events stream the injected dev script listens on: `reload`
+  (code recompiled — fully reload), `css` (assets-only change — swap the
+  stylesheet link in place), and `compile-error` (show the compiler
+  output as an overlay while old code keeps serving). On connect the
+  stream sends the current token, so a reconnecting tab detects missed
+  bumps and server restarts. Outside dev the endpoint is a 404.
   """
 
   @behaviour Plug
@@ -122,10 +127,14 @@ defmodule Fractal.Router do
     |> Enum.reduce(conn, fn {name, value}, conn -> put_resp_header(conn, name, value) end)
   end
 
+  # the dev event stream (see the moduledoc); a dumb pipe over the
+  # current LiveReload state, like the watch streams
   defp dispatch(%Plug.Conn{method: "GET", path_info: ["fractal", "reload"]} = conn, _opts) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(200, ~s({"token":#{LiveReload.token()}}))
+    if dev_mode?() do
+      stream_reload(conn)
+    else
+      not_found(conn, current_path(conn))
+    end
   end
 
   # the CSS bundle: assets/app.css + every page's scoped style/0
@@ -396,6 +405,54 @@ defmodule Fractal.Router do
               "#{inspect(page)}.handle_watch/2 must return {:fragment, content} or " <>
                 "{:redirect, to} — {:render, ...} is for request handlers"
     end
+  end
+
+  defp stream_reload(conn) do
+    :ok = LiveReload.subscribe()
+    conn = sse_start(conn)
+    {token, event} = LiveReload.current()
+
+    # initial state: the token lets a reconnecting tab detect missed
+    # bumps (and server restarts); an active compile error shows at once
+    with {:ok, conn} <- chunk_or_closed(conn, sse_named_event("hello", to_string(token))),
+         {:ok, conn} <- push_initial_error(conn, event) do
+      reload_loop(conn)
+    else
+      {:closed, conn} -> conn
+    end
+  end
+
+  defp push_initial_error(conn, {:error, message}) do
+    chunk_or_closed(conn, sse_named_event("compile-error", message))
+  end
+
+  defp push_initial_error(conn, _event), do: {:ok, conn}
+
+  defp reload_loop(conn) do
+    keepalive = Application.get_env(:fractal, :watch_keepalive_ms, 15_000)
+
+    result =
+      receive do
+        {:fractal_watch, _topic} ->
+          {token, event} = LiveReload.current()
+          chunk_or_closed(conn, reload_event(token, event))
+      after
+        keepalive -> chunk_or_closed(conn, ": keepalive\n\n")
+      end
+
+    case result do
+      {:ok, conn} -> reload_loop(conn)
+      {:closed, conn} -> conn
+    end
+  end
+
+  defp reload_event(token, :reload), do: sse_named_event("reload", to_string(token))
+  defp reload_event(_token, {:css, href}), do: sse_named_event("css", href)
+  defp reload_event(_token, {:error, message}), do: sse_named_event("compile-error", message)
+
+  defp sse_named_event(name, data) do
+    lines = data |> String.split("\n") |> Enum.map_join("\n", &("data: " <> &1))
+    "event: " <> name <> "\n" <> lines <> "\n\n"
   end
 
   defp sse_start(conn) do

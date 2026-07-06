@@ -18,6 +18,52 @@ defmodule Fractal.ReloaderTest do
            "expected the reload token to change after a source file event"
   end
 
+  test "an assets-only batch skips the compile and pushes a css swap",
+       %{reloader: reloader} do
+    before_token = LiveReload.token()
+
+    send(reloader, {:file_event, self(), {"/app/assets/app.css", [:modified]}})
+
+    assert eventually(fn -> LiveReload.token() != before_token end),
+           "expected the reload token to change after an assets change"
+
+    assert {_token, {:css, href}} = LiveReload.current()
+    assert href =~ ~r{^/fractal/assets/app-[0-9a-f]+\.css$}
+
+    # leave the shared state clean for other tests
+    LiveReload.bump()
+  end
+
+  test "classify/1 needs a compile only when a code file is in the batch" do
+    assert Reloader.classify(["assets/app.css", "assets/static/logo.svg"]) == :css
+    assert Reloader.classify(["assets/app.css", "lib/my_app/pages/home.ex"]) == :code
+    assert Reloader.classify(["lib/my_app/pages/home.ex"]) == :code
+  end
+
+  test "format_errors/1 renders error diagnostics as file:line + message" do
+    diagnostics = [
+      %Mix.Task.Compiler.Diagnostic{
+        compiler_name: "Elixir",
+        file: Path.expand("lib/my_app/pages/home.ex"),
+        position: {3, 12},
+        message: "unexpected token: ,",
+        severity: :error
+      },
+      %Mix.Task.Compiler.Diagnostic{
+        compiler_name: "Elixir",
+        file: Path.expand("lib/my_app/other.ex"),
+        position: 9,
+        message: "just a warning",
+        severity: :warning
+      }
+    ]
+
+    formatted = Reloader.format_errors(diagnostics)
+
+    assert formatted =~ "lib/my_app/pages/home.ex:3: unexpected token: ,"
+    refute formatted =~ "just a warning"
+  end
+
   test "a non-source file event is ignored", %{reloader: reloader} do
     before_token = LiveReload.token()
 

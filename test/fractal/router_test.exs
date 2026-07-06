@@ -287,21 +287,8 @@ defmodule Fractal.RouterTest do
     assert conn.resp_body =~ "Create a Fractal page at /does-not-exist"
   end
 
-  test "GET /fractal/reload returns the live-reload token" do
-    conn = get("/fractal/reload")
-
-    assert conn.status == 200
-    assert {"content-type", "application/json; charset=utf-8"} in conn.resp_headers
-    assert %{"token" => token} = JSON.decode!(conn.resp_body)
-    assert is_integer(token)
-  end
-
-  test "the reload token changes after a bump" do
-    %{"token" => before_token} = JSON.decode!(get("/fractal/reload").resp_body)
-    Fractal.LiveReload.bump()
-    %{"token" => after_token} = JSON.decode!(get("/fractal/reload").resp_body)
-
-    assert after_token != before_token
+  test "GET /fractal/reload is a 404 outside dev — the stream is dev-only" do
+    assert get("/fractal/reload").status == 404
   end
 
   describe "assets" do
