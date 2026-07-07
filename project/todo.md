@@ -6,7 +6,6 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Faster path evaluation - Task 16
 - [ ] Third party JS libs?
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
@@ -30,5 +29,7 @@ Done
 - [x] Add installer task 12
 - [x] Push from the server? in task 13
   - [x] Build a chat app
-- [ ] Prompting from the page itself? (can we embed)
+- [x] Prompting from the page itself? (can we embed) - task 14
   - Nice expecially for UI changes -- a la tidewave
+- [x] live reload push (instead of pull) task 15
+- [x] Faster path evaluation - Task 16
