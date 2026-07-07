@@ -531,6 +531,13 @@ defmodule Fractal.Page do
     do_match(segments(pattern), path_segments, %{})
   end
 
+  @doc false
+  # `match/2` for pre-split patterns — the route table splits once at
+  # build time instead of per request
+  def match_segments(pattern_segments, path_segments) do
+    do_match(pattern_segments, path_segments, %{})
+  end
+
   @doc "The number of dynamic (`:name`) segments in a route pattern."
   @spec param_count(String.t()) :: non_neg_integer()
   def param_count(pattern) do

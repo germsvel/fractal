@@ -10,9 +10,13 @@ defmodule Fractal.Router do
   dispatch, since browsers only submit GET and POST forms. Route
   patterns may contain dynamic segments (`"/posts/:id"`), which are
   bound into `assigns.params`. Static segments win over dynamic ones
-  when both match. New page modules are picked up as soon as they are
-  compiled, which is what makes the development loop (agent writes a
-  page → watcher recompiles → browser reloads) work without restarts.
+  when both match. In development, discovery is live — new page modules
+  are picked up as soon as they are compiled, which is what makes the
+  development loop (agent writes a page → watcher recompiles → browser
+  reloads) work without restarts. In production the discovered route
+  table is built once and cached (`:persistent_term`; disable with
+  `config :fractal, cache_discovery: false`), so routing costs a lookup
+  instead of a discovery pass.
 
   ## Sessions and CSRF
 
@@ -232,11 +236,7 @@ defmodule Fractal.Router do
 
   @doc "All discovered page modules, sorted by path."
   @spec pages() :: [module()]
-  def pages do
-    candidate_modules()
-    |> Enum.filter(&Page.page?/1)
-    |> Enum.sort_by(& &1.path())
-  end
+  def pages, do: Fractal.Routes.pages()
 
   # Session cookie + CSRF. Conns that already carry a session (from
   # Plug.Test.init_test_session, via Fractal.Test) keep it; real requests
@@ -530,25 +530,8 @@ defmodule Fractal.Router do
   end
 
   defp find_route(method, path_segments) do
-    pages()
-    |> Enum.flat_map(fn page ->
-      case route_pattern(page, method) do
-        nil -> []
-        pattern -> [{page, pattern}]
-      end
-    end)
-    # static routes take precedence over ones with dynamic segments
-    |> Enum.sort_by(fn {_page, pattern} -> Page.param_count(pattern) end)
-    |> Enum.find_value(fn {page, pattern} ->
-      case Page.match(pattern, path_segments) do
-        {:ok, params} -> {page, params}
-        :error -> nil
-      end
-    end)
+    Fractal.Routes.find(method, path_segments)
   end
-
-  defp route_pattern(page, :get), do: page.path()
-  defp route_pattern(page, action), do: Page.action_route(page, action)
 
   defp current_path(conn), do: "/" <> Enum.join(conn.path_info, "/")
 
@@ -787,8 +770,6 @@ defmodule Fractal.Router do
     |> put_resp_content_type("text/html")
     |> send_resp(404, Document.shell("Not found", body))
   end
-
-  defp candidate_modules, do: Fractal.Discovery.modules()
 
   defp dev_mode?, do: Application.get_env(:fractal, :live_reload, false)
 end

@@ -163,7 +163,7 @@ defmodule Fractal.Checkpoint do
 
   @doc "The app's checkpoint module, or `nil` (there should be at most one)."
   @spec module() :: module() | nil
-  def module, do: modules() |> List.first()
+  def module, do: Fractal.Routes.checkpoint()
 
   @doc false
   @spec modules() :: [module()]

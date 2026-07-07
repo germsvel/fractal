@@ -43,6 +43,18 @@ defmodule Fractal.Discovery do
     end
   end
 
+  # Whether discovery products (the route table, the CSS bundle) may be
+  # cached. False wherever they can change or be manipulated: dev (the
+  # reloader recompiles code) and test envs (which set
+  # `config :fractal, cache_discovery: false` so nothing can go stale
+  # mid-suite). The flag also serves as a one-line diagnostic lever in
+  # any environment if a stale-discovery bug is ever suspected.
+  @spec cache?() :: boolean()
+  def cache? do
+    Application.get_env(:fractal, :cache_discovery, true) and
+      not Application.get_env(:fractal, :live_reload, false)
+  end
+
   # Scans the host app's ebin for modules instead of using
   # Application.spec/2 so that modules compiled after boot (by the dev
   # reloader) are still found. Used for pages, components, the

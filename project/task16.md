@@ -67,6 +67,13 @@ primitive, an implementation detail of the router):
   the contract; no behavior change is acceptable.
 - `Router.pages/0` keeps its exact contract (verify, the gallery,
   ai.docs, the 404 page all consume it) — it just reads the table.
+- The same term also carries the discovered **checkpoint and layout
+  modules** — the other two discovery products consumed on every
+  request (`Checkpoint.context/1` in assigns, `Layout.site/chrome` in
+  the document). Leaving them out would have left two ebin scans per
+  request in place; folding them in is the "terms updated together
+  live in one term" rule. Their plural `modules/0` discovery functions
+  (verify's at-most-one checks) stay live.
 
 ### The cache: persistent_term, used the way its docs demand
 
@@ -167,18 +174,18 @@ touch. Wait for my go-ahead, then execute in one pass.
 
 ## Definition of done
 
-- [ ] Routing no longer touches the filesystem or module reflection
+- [x] Routing no longer touches the filesystem or module reflection
   per request when cached: table built once, read from
   `{Fractal.Router, :routes}`.
-- [ ] Benchmark in `examples/blog` shows per-request routing cost
+- [x] Benchmark in `examples/blog` shows per-request routing cost
   dropping from hundreds of µs to single-digit µs on the cached path,
   with the uncached (dev) path unchanged.
-- [ ] Match semantics are provably identical: all existing router,
+- [x] Match semantics are provably identical: all existing router,
   verify, and blog tests pass unmodified.
-- [ ] The dev loop still picks up new pages without restart
+- [x] The dev loop still picks up new pages without restart
   (uncached path), demonstrated in `examples/blog`.
-- [ ] persistent_term usage follows the recorded constraints: single
+- [x] persistent_term usage follows the recorded constraints: single
   key, single term, no writes outside the cache-eligible path, no
   long-lived holders.
-- [ ] Framework suite, blog suite + verify, and the born-green
+- [x] Framework suite, blog suite + verify, and the born-green
   integration test stay green.

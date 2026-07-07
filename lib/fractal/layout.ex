@@ -89,7 +89,7 @@ defmodule Fractal.Layout do
 
   @doc "The app's layout module, or `nil` (there should be at most one)."
   @spec module() :: module() | nil
-  def module, do: modules() |> List.first()
+  def module, do: Fractal.Routes.layout()
 
   @doc false
   @spec modules() :: [module()]

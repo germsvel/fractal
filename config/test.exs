@@ -9,4 +9,9 @@ config :fractal,
 # it short so server shutdown doesn't wait on lingering SSE processes
 config :fractal, watch_keepalive_ms: 100
 
+# Discovery products (the route table, the CSS bundle) are cached
+# outside dev; tests stay on the live path so nothing can go stale
+# mid-suite no matter what they mutate or toggle.
+config :fractal, cache_discovery: false
+
 config :logger, level: :warning

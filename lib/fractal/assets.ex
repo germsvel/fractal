@@ -162,5 +162,5 @@ defmodule Fractal.Assets do
   end
 
   # rebuild per request in dev so style edits show up on reload
-  defp cache?, do: not Application.get_env(:fractal, :live_reload, false)
+  defp cache?, do: Fractal.Discovery.cache?()
 end
