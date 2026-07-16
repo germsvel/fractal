@@ -6,11 +6,11 @@ Task board for the Fractal project.
 Ideas Backlog
 ---------------
 
-- [ ] Declarative browser actions - Task 17
 - [ ] Third party JS libs?
 - [ ] Do we need "plugin" system? Or is each page its own plugin?
   - example: what if people want to pull a known auth package?
 - [ ] Better test helpers
+- [ ] Do we need some DOM wrapper that helps with HTML parsing?
 
 Done
 -----
@@ -34,3 +34,4 @@ Done
   - Nice expecially for UI changes -- a la tidewave
 - [x] live reload push (instead of pull) task 15
 - [x] Faster path evaluation - Task 16
+- [x] Declarative browser actions - Task 17
