@@ -195,6 +195,13 @@ defmodule Fractal.PageTest do
     assert Fractal.Page.style(Sample) == nil
   end
 
+  test "keys/0 defaults to [] and reflects the :keys option" do
+    assert Sample.keys() == []
+
+    assert Fractal.Page.keys(Fractal.Fixtures.KeyPage)
+           |> Enum.any?(&match?({"j", {:event, "ping"}}, &1))
+  end
+
   test "events/0 defaults to [] and reflects the :events option" do
     assert Sample.events() == []
     assert WithEvents.events() == ["ping"]

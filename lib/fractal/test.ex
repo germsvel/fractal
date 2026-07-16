@@ -62,6 +62,41 @@ defmodule Fractal.Test do
   end
 
   @doc """
+  Fires a declared keyboard shortcut. Event actions dispatch through the
+  same `/fractal/event` endpoint as the browser; local browser actions
+  return `{:local, action}` because they have no server behavior.
+  """
+  @spec fire_key(String.t(), String.t(), map(), keyword()) ::
+          Plug.Conn.t() | {:local, tuple()} | {:error, term()}
+  def fire_key(path, key, values \\ %{}, opts \\ []) do
+    segments =
+      path |> String.split("?") |> List.first() |> String.split("/") |> Enum.reject(&(&1 == ""))
+
+    page =
+      Fractal.Router.pages()
+      |> Enum.filter(fn page -> match?({:ok, _}, Fractal.Page.match(page.path(), segments)) end)
+      |> Enum.min_by(&Fractal.Page.param_count(&1.path()), fn -> nil end)
+
+    case page do
+      nil ->
+        {:error, :page_not_found}
+
+      page ->
+        case Enum.find(Fractal.Page.keys(page), fn {declared, _} -> declared == key end) do
+          nil -> {:error, :key_not_found}
+          {^key, {:event, event}} -> fire_event(path, event, values, opts)
+          {^key, action} -> {:local, action}
+        end
+    end
+  end
+
+  @doc "Asserts the local action declared for `key` on `page`."
+  @spec assert_key_action(module(), String.t(), tuple()) :: :ok | {:error, term()}
+  def assert_key_action(page, key, action) do
+    if {key, action} in Fractal.Page.keys(page), do: :ok, else: {:error, :key_action_not_found}
+  end
+
+  @doc """
   Delivers a watch topic to the page serving `path`, exactly as a
   `publish/1` would over the push stream — resolve the page, run its
   guards, run `handle_watch/2` — and returns the response: 200 with the

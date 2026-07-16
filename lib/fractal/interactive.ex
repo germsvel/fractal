@@ -35,6 +35,13 @@ defmodule Fractal.Interactive do
   (which is why the region carries an `id` and the trigger points at
   it).
 
+  Page-level keyboard shortcuts are declarative browser actions too:
+  declare `keys: ["/": {:focus, "#search"}, "r": {:event, "refresh"}]`
+  beside `events:`. Supported local actions are focus, navigate, show,
+  hide, and toggle; `{:event, name}` uses this same HTTP path. Targets
+  are id selectors, and shortcuts never fire while a user is editing a
+  form field. They are accelerators, never the only accessible control.
+
   The reverse direction — the server pushing to the browser — is the
   page-level `watch:` declaration plus `publish/1` (both documented in
   `Fractal.Page` and the push guide). The same runtime handles both.
@@ -129,21 +136,23 @@ defmodule Fractal.Interactive do
     """
     <script>
     (function () {
-      function fire(el) {
+      function fireEvent(event, target) {
         var body = new URLSearchParams();
         body.set("_fx_path", window.location.pathname);
-        body.set("_fx_event", el.getAttribute("data-fx-event"));
+        body.set("_fx_event", event);
         var csrf = document.querySelector('meta[name="fractal-csrf-token"]');
         if (csrf) body.set("_csrf_token", csrf.getAttribute("content"));
-        var values = el.getAttribute("data-fx-values");
-        if (values) {
-          var parsed = JSON.parse(values);
-          for (var key in parsed) body.set(key, parsed[key]);
+        if (target) {
+          var values = target.getAttribute("data-fx-values");
+          if (values) {
+            var parsed = JSON.parse(values);
+            for (var key in parsed) body.set(key, parsed[key]);
+          }
         }
-        if (el.tagName === "FORM") {
-          new FormData(el).forEach(function (value, key) { body.set(key, value); });
-        } else if (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") {
-          body.set(el.getAttribute("name") || "value", el.value);
+        if (target && target.tagName === "FORM") {
+          new FormData(target).forEach(function (value, key) { body.set(key, value); });
+        } else if (target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")) {
+          body.set(target.getAttribute("name") || "value", target.value);
         }
         fetch("/fractal/event", {
           method: "POST",
@@ -153,11 +162,55 @@ defmodule Fractal.Interactive do
           var redirect = resp.headers.get("fx-redirect");
           if (redirect) { window.location.href = redirect; return; }
           return resp.text().then(function (html) {
-            var target = document.querySelector(el.getAttribute("data-fx-target"));
-            if (target && resp.ok) target.outerHTML = html;
+            var replacement = document.querySelector(target && target.getAttribute("data-fx-target"));
+            if (!replacement) {
+              var tpl = document.createElement("template");
+              tpl.innerHTML = html;
+              var root = tpl.content.firstElementChild;
+              replacement = root && root.id && document.getElementById(root.id);
+            }
+            if (replacement && resp.ok) replacement.outerHTML = html;
           });
         }).catch(function () {});
       }
+
+      function fire(el) { return fireEvent(el.getAttribute("data-fx-event"), el); }
+
+      function editable(el) {
+        return el && el.closest("input, textarea, select, [contenteditable]");
+      }
+
+      function keyMatches(binding, e) {
+        var parts = binding.split("+");
+        var key = parts.pop();
+        var mod = parts.indexOf("Mod") >= 0;
+        var mac = /Mac|iPhone|iPad/.test(navigator.platform);
+        return e.key === key && e.ctrlKey === (parts.indexOf("Ctrl") >= 0 || (mod && !mac)) &&
+          e.metaKey === (mod && mac) && e.altKey === (parts.indexOf("Alt") >= 0) &&
+          e.shiftKey === (parts.indexOf("Shift") >= 0);
+      }
+
+      document.addEventListener("keydown", function (e) {
+        if (editable(e.target)) return;
+        var main = document.querySelector("main[data-fx-keys]");
+        if (!main) return;
+        var bindings = JSON.parse(main.getAttribute("data-fx-keys"));
+        for (var key in bindings) if (keyMatches(key, e)) {
+          var action = bindings[key];
+          e.preventDefault();
+          if (action.type === "event") fireEvent(action.value);
+          else if (action.type === "navigate") window.location.href = action.value;
+          else {
+            var target = document.getElementById(action.value.slice(1));
+            if (!target) return;
+            if (action.type === "focus") target.focus();
+            if (action.type === "show") target.hidden = false;
+            if (action.type === "hide") target.hidden = true;
+            if (action.type === "toggle") target.hidden = !target.hidden;
+          }
+          return;
+        }
+      });
 
       function handler(kind, immediate) {
         return function (e) {

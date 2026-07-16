@@ -173,6 +173,34 @@ defmodule Fractal.Fixtures do
     end
   end
 
+  defmodule KeyPage do
+    @moduledoc false
+    use Fractal.Page,
+      path: "/fixtures/keys",
+      title: "Keys",
+      events: ["ping"],
+      keys: [
+        j: {:event, "ping"},
+        /: {:focus, "#key-search"},
+        "?": {:toggle, "#key-help"},
+        Escape: {:hide, "#key-help"},
+        n: {:navigate, "/fixtures/new"}
+      ]
+
+    @impl Fractal.Page
+    def render(_assigns) do
+      tag(:section, [], [
+        tag(:h1, [], ["Keys"]),
+        tag(:input, id: "key-search", type: "search"),
+        tag(:aside, [id: "key-help", hidden: true], ["Keyboard help"]),
+        tag(:div, [id: "key-result"], ["waiting"])
+      ])
+    end
+
+    @impl Fractal.Page
+    def handle_event("ping", _assigns), do: {:fragment, tag(:div, [id: "key-result"], ["pong"])}
+  end
+
   defmodule WatchPage do
     @moduledoc false
     use Fractal.Page,

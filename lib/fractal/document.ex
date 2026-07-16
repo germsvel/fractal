@@ -265,9 +265,20 @@ defmodule Fractal.Document do
 
   defp page_attr(page) do
     # data-fx-watch is the runtime's on-switch: only pages that declare
-    # watch: open a server-push connection
+    # watch: open a server-push connection. Key bindings are framework
+    # data, encoded once here rather than authored as browser code.
     watch_attr = if Page.watches(page) == [], do: "", else: " data-fx-watch"
-    [" data-page=\"", Page.slug(page), "\"", watch_attr]
+
+    keys_attr =
+      case Page.keys(page) do
+        [] ->
+          ""
+
+        keys ->
+          [" data-fx-keys=\"", HTML.escape(Fractal.Interactive.BrowserAction.encode(keys)), "\""]
+      end
+
+    [" data-page=\"", Page.slug(page), "\"", watch_attr, keys_attr]
   end
 
   defp flash_banners(flash) when flash in [nil, %{}], do: ""

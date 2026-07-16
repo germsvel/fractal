@@ -7,7 +7,11 @@ defmodule Blog.Pages.Search do
   matching posts. No JavaScript was written for this page.
   """
 
-  use Fractal.Page, path: "/search", title: "Search", events: ["search"]
+  use Fractal.Page,
+    path: "/search",
+    title: "Search",
+    events: ["search"],
+    keys: ["/": {:focus, "#search-query"}, "?": {:toggle, "#keyboard-help"}, "Escape": {:hide, "#keyboard-help"}]
 
   import Ecto.Query, only: [from: 2]
 
@@ -21,6 +25,7 @@ defmodule Blog.Pages.Search do
         tag(
           :input,
           [
+            id: "search-query",
             type: "text",
             name: "q",
             placeholder: "Type to search by title...",
@@ -29,7 +34,10 @@ defmodule Blog.Pages.Search do
             fx("search", target: "#results", on: :input)
         )
       ]),
-      results("")
+      results(""),
+      tag(:aside, [id: "keyboard-help", hidden: true], [
+        tag(:p, [], ["Keyboard shortcuts: / focuses search; ? shows this help; Escape hides it."])
+      ])
     ])
   end
 

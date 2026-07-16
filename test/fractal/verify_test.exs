@@ -12,6 +12,13 @@ defmodule Fractal.VerifyTest do
     def render(_assigns), do: tag(:p, [], ["fine"])
   end
 
+  defmodule MissingKeyTarget do
+    use Fractal.Page, path: "/verify-key-target", keys: [/: {:focus, "#serach"}]
+
+    @impl Fractal.Page
+    def render(_assigns), do: tag(:input, id: "search", type: "search")
+  end
+
   defmodule DuplicateA do
     use Fractal.Page, path: "/verify-dup"
 
@@ -190,6 +197,15 @@ defmodule Fractal.VerifyTest do
   test "a well-formed page passes all checks" do
     results = Verify.run([GoodPage])
     assert Verify.ok?(results)
+  end
+
+  test "verifies keyboard shortcut targets against the baseline render" do
+    errors = Verify.run([MissingKeyTarget]) |> Verify.errors()
+
+    assert Enum.any?(errors, fn {name, {:error, message}} ->
+             name =~ "keyboard shortcut targets" and message =~ "key \"/\"" and
+               message =~ "missing id #serach"
+           end)
   end
 
   test "detects when no pages exist" do

@@ -72,6 +72,33 @@ Options: `target:` (required — CSS selector the fragment replaces),
 checkboxes), or `:submit` (a whole `<form>`; all fields become params).
 Inputs send their `name` (or `"value"`) automatically.
 
+## Keyboard shortcuts and browser actions
+
+Pages can declare small, verified keyboard accelerators without writing
+JavaScript. They remain accelerators: always render a button, link, or other
+accessible path for the underlying action too.
+
+```elixir
+use Fractal.Page, path: "/search", events: ["refresh"], keys: [
+  "/": {:focus, "#search"},
+  "?": {:toggle, "#keyboard-help"},
+  "Escape": {:hide, "#keyboard-help"},
+  "r": {:event, "refresh"},
+  "n": {:navigate, "/posts/new"}
+]
+```
+
+Supported actions are `{:event, name}`, `{:focus, "#id"}`, `{:navigate,
+"/path"}`, `{:show, "#id"}`, `{:hide, "#id"}`, and `{:toggle, "#id"}`.
+Targets are id selectors only. `mix fractal.verify` checks that targets exist
+in the page's normal render and that focus targets are focusable. Shortcuts do
+not fire while a user is editing an input, textarea, select, or editable
+content. Keys may be printable characters, `Escape`/`Enter`/arrow names, or
+modifier chords such as `Mod+k` and `Ctrl+k`.
+
+Test an event shortcut with `fire_key("/search", "r")`; local actions can be
+checked with `assert_key_action(MyApp.Pages.Search, "/", {:focus, "#search"})`.
+
 ## The fast path: the generator
 
 ```

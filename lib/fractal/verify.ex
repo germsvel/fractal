@@ -636,6 +636,8 @@ defmodule Fractal.Verify do
       action_checks ++
       [
         {"#{inspect(page)} handles its events", validate_events(page)},
+        {"#{inspect(page)} declares valid keyboard shortcuts", validate_keys(page)},
+        {"#{inspect(page)} verifies keyboard shortcut targets", validate_key_targets(page)},
         {"#{inspect(page)} handles its watches", validate_watches(page)},
         {"#{inspect(page)} requires defined guards", validate_requires(page)},
         {"#{inspect(page)} declares valid meta", validate_meta(page)},
@@ -810,6 +812,62 @@ defmodule Fractal.Verify do
     end
   rescue
     exception -> {:error, "events/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_keys(page) do
+    case Fractal.Interactive.BrowserAction.normalize(Page.keys(page), Page.events(page)) do
+      {:ok, _keys} -> :ok
+      {:error, message} -> {:error, message}
+    end
+  rescue
+    exception -> {:error, "keys/0 raised: #{Exception.message(exception)}"}
+  end
+
+  defp validate_key_targets(page) do
+    keys = Page.keys(page)
+
+    if keys == [] do
+      :ok
+    else
+      case smoke_render(page) do
+        {:ok, html} ->
+          keys
+          |> Enum.filter(fn {_key, {type, _value}} -> type in [:focus, :show, :hide, :toggle] end)
+          |> Enum.find_value(:ok, fn {key, {type, selector}} ->
+            id = Fractal.Interactive.BrowserAction.target_id(selector)
+
+            cond do
+              not String.contains?(html, ~s(id="#{id}")) ->
+                {:error, "key #{inspect(key)} action #{inspect(type)} targets missing id ##{id}"}
+
+              type == :focus and not focusable_id?(html, id) ->
+                {:error,
+                 "key #{inspect(key)} action :focus targets ##{id}, which is not focusable"}
+
+              true ->
+                nil
+            end
+          end)
+
+        :error ->
+          {:error, "the page does not render (fix its render check first)"}
+      end
+    end
+  rescue
+    exception ->
+      {:error, "keyboard shortcut targets could not be checked: #{Exception.message(exception)}"}
+  end
+
+  defp focusable_id?(html, id) do
+    ~r/<[^>]+>/
+    |> Regex.scan(html)
+    |> Enum.map(&hd/1)
+    |> Enum.any?(fn tag ->
+      String.contains?(tag, ~s(id="#{id}")) and
+        (Regex.match?(~r/^<(input|textarea|select|button)\b/i, tag) or
+           (Regex.match?(~r/^<a\b/i, tag) and String.contains?(tag, "href=")) or
+           String.contains?(tag, "tabindex="))
+    end)
   end
 
   # the compile-time checks, re-run here to catch pages that bypassed

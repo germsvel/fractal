@@ -140,6 +140,12 @@ defmodule Fractal.RouterTest do
     assert Plug.Conn.get_resp_header(conn, "location") == ["/fixtures?deleted=9"]
   end
 
+  test "fire_key dispatches event shortcuts and resolves local actions" do
+    assert fire_key("/fixtures/keys", "j").resp_body =~ "pong"
+    assert fire_key("/fixtures/keys", "/") == {:local, {:focus, "#key-search"}}
+    assert :ok = assert_key_action(Fractal.Fixtures.KeyPage, "/", {:focus, "#key-search"})
+  end
+
   describe "POST /fractal/event" do
     test "dispatches to the page's handle_event/2 and returns the fragment" do
       conn = fire_event("/fixtures/ping", "ping", %{"n" => "41"})

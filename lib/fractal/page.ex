@@ -35,6 +35,8 @@ defmodule Fractal.Page do
     * `:delete` (optional) — a destroy route handled by `handle_delete/1`.
     * `:events` (optional) — the interactive events this page handles
       with `handle_event/2`. See `Fractal.Interactive`.
+    * `:keys` (optional) — page keyboard shortcuts and bounded browser
+      actions. See `Fractal.Interactive`.
     * `:watch` (optional) — the server-push topics this page handles
       with `handle_watch/2`. See the "Server push" section below.
     * `:require` (optional) — a guard name (or list of them) that must
@@ -212,6 +214,7 @@ defmodule Fractal.Page do
   @callback put_path() :: String.t() | nil
   @callback delete_path() :: String.t() | nil
   @callback events() :: [String.t()]
+  @callback keys() :: [{String.t(), tuple()}]
   @callback watches() :: [String.t()]
   @callback style() :: String.t()
   @callback requires() :: [atom()]
@@ -229,6 +232,7 @@ defmodule Fractal.Page do
                       put_path: 0,
                       delete_path: 0,
                       events: 0,
+                      keys: 0,
                       watches: 0,
                       style: 0,
                       requires: 0,
@@ -255,6 +259,7 @@ defmodule Fractal.Page do
       @fractal_page_put Keyword.get(opts, :put)
       @fractal_page_delete Keyword.get(opts, :delete)
       @fractal_page_events Keyword.get(opts, :events, [])
+      @fractal_page_keys Keyword.get(opts, :keys, [])
       @fractal_page_watches Keyword.get(opts, :watch, [])
       @fractal_page_requires opts |> Keyword.get(:require, []) |> List.wrap()
       @before_compile Fractal.Page
@@ -271,6 +276,7 @@ defmodule Fractal.Page do
       end
 
     events = Module.get_attribute(env.module, :fractal_page_events)
+    keys = Module.get_attribute(env.module, :fractal_page_keys)
     watches = Module.get_attribute(env.module, :fractal_page_watches)
     requires = Module.get_attribute(env.module, :fractal_page_requires)
 
@@ -289,6 +295,7 @@ defmodule Fractal.Page do
     end
 
     validate_events!(env.module, events, Module.defines?(env.module, {:handle_event, 2}))
+    keys = Fractal.Interactive.BrowserAction.normalize!(keys, events, env.module)
     validate_watches!(env.module, path, watches, Module.defines?(env.module, {:handle_watch, 2}))
 
     title = title || default_title(env.module)
@@ -298,6 +305,7 @@ defmodule Fractal.Page do
             title: title,
             actions: actions,
             events: events,
+            keys: keys,
             watches: watches,
             requires: requires
           ] do
@@ -309,6 +317,9 @@ defmodule Fractal.Page do
 
       @impl Fractal.Page
       def events, do: unquote(events)
+
+      @impl Fractal.Page
+      def keys, do: unquote(keys)
 
       @impl Fractal.Page
       def watches, do: unquote(watches)
@@ -406,6 +417,12 @@ defmodule Fractal.Page do
   @spec events(module()) :: [String.t()]
   def events(module) do
     if function_exported?(module, :events, 0), do: module.events(), else: []
+  end
+
+  @doc "Returns the keyboard bindings `module` declares (works for any page)."
+  @spec keys(module()) :: [{String.t(), tuple()}]
+  def keys(module) do
+    if function_exported?(module, :keys, 0), do: module.keys(), else: []
   end
 
   @doc false

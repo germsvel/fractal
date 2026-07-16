@@ -62,6 +62,20 @@ defmodule Fractal.DocumentTest do
              ~s(<main data-page="static-page">)
   end
 
+  test "pages with keyboard shortcuts carry encoded framework bindings" do
+    html =
+      Document.render(Fractal.Fixtures.KeyPage, %{
+        params: %{},
+        session: %{},
+        context: %{},
+        path: "/fixtures/keys",
+        conn: nil
+      })
+
+    assert html =~ "data-fx-keys="
+    assert html =~ "&quot;focus&quot;"
+  end
+
   test "always includes the CSRF token meta tag" do
     assert Document.shell("t", "b") =~ ~s(<meta name="fractal-csrf-token" content=")
   end
