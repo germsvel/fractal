@@ -52,6 +52,7 @@ defmodule Fractal.Interactive do
     * `on: :input` — text inputs; debounced 300ms (live search)
     * `on: :change` — selects, checkboxes
     * `on: :submit` — a `<form>`; all its fields are sent as params
+    * `on: :drop` — a drop target; the dragged card id is sent as `"card_id"`
 
   Inputs send their `name` (or `"value"` when unnamed) along with the
   event automatically.
@@ -68,7 +69,7 @@ defmodule Fractal.Interactive do
 
     * `:target` (required) — CSS selector of the element the returned
       fragment replaces
-    * `:on` — `:click` (default), `:input`, `:change`, or `:submit`
+    * `:on` — `:click` (default), `:input`, `:change`, `:submit`, or `:drop`
     * `:values` — a map of extra params to send with the event
   """
   @spec fx(String.t(), keyword()) :: keyword()
@@ -80,8 +81,8 @@ defmodule Fractal.Interactive do
 
     on = Keyword.get(opts, :on, :click)
 
-    unless on in [:click, :input, :change, :submit] do
-      raise ArgumentError, "fx/2 :on must be :click, :input, :change, or :submit"
+    unless on in [:click, :input, :change, :submit, :drop] do
+      raise ArgumentError, "fx/2 :on must be :click, :input, :change, :submit, or :drop"
     end
 
     [
@@ -105,6 +106,19 @@ defmodule Fractal.Interactive do
     {fx_opts, button_attrs} = Keyword.split(opts, [:target, :on, :values])
 
     tag(:button, [type: "button"] ++ fx(event, fx_opts) ++ button_attrs, [label])
+  end
+
+  @doc """
+  Marks an element as a draggable card for a `fx(..., on: :drop)` target.
+
+      tag(:li, [class: "card"] ++ drag_card(card.id), [...])
+
+  The built-in runtime carries the card id to the drop target's event; no
+  page JavaScript is needed.
+  """
+  @spec drag_card(String.t()) :: keyword()
+  def drag_card(card_id) when is_binary(card_id) and card_id != "" do
+    [draggable: true, "data-fx-drag-card": card_id]
   end
 
   @doc """
@@ -136,7 +150,7 @@ defmodule Fractal.Interactive do
     """
     <script>
     (function () {
-      function fireEvent(event, target) {
+      function fireEvent(event, target, extra) {
         var body = new URLSearchParams();
         body.set("_fx_path", window.location.pathname);
         body.set("_fx_event", event);
@@ -148,6 +162,9 @@ defmodule Fractal.Interactive do
             var parsed = JSON.parse(values);
             for (var key in parsed) body.set(key, parsed[key]);
           }
+        }
+        if (extra) {
+          for (var extraKey in extra) body.set(extraKey, extra[extraKey]);
         }
         if (target && target.tagName === "FORM") {
           new FormData(target).forEach(function (value, key) { body.set(key, value); });
@@ -174,7 +191,7 @@ defmodule Fractal.Interactive do
         }).catch(function () {});
       }
 
-      function fire(el) { return fireEvent(el.getAttribute("data-fx-event"), el); }
+      function fire(el, extra) { return fireEvent(el.getAttribute("data-fx-event"), el, extra); }
 
       function editable(el) {
         return el && el.closest("input, textarea, select, [contenteditable]");
@@ -227,6 +244,36 @@ defmodule Fractal.Interactive do
       document.addEventListener("change", handler("change", true));
       document.addEventListener("submit", handler("submit", true));
       document.addEventListener("input", handler("input", false));
+
+      var draggedCard;
+      document.addEventListener("dragstart", function (e) {
+        var card = e.target.closest("[data-fx-drag-card]");
+        if (!card) return;
+        draggedCard = card.getAttribute("data-fx-drag-card");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedCard);
+        card.classList.add("fx-dragging");
+      });
+      document.addEventListener("dragover", function (e) {
+        var target = e.target.closest('[data-fx-event][data-fx-on="drop"]');
+        if (!target || !draggedCard) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      });
+      document.addEventListener("drop", function (e) {
+        var target = e.target.closest('[data-fx-event][data-fx-on="drop"]');
+        if (!target) return;
+        var cardId = draggedCard || e.dataTransfer.getData("text/plain");
+        if (!cardId) return;
+        e.preventDefault();
+        fire(target, { card_id: cardId });
+        draggedCard = null;
+      });
+      document.addEventListener("dragend", function (e) {
+        var card = e.target.closest("[data-fx-drag-card]");
+        if (card) card.classList.remove("fx-dragging");
+        draggedCard = null;
+      });
 
       // server push: pages that declare watch: carry data-fx-watch on
       // <main>; one EventSource per tab, fragments swap by root id, and

@@ -69,8 +69,16 @@ tag(:input, [type: "text", name: "q", placeholder: "Search..."] ++
 Options: `target:` (required — CSS selector the fragment replaces),
 `values:` (map of extra params), and `on:` — `:click` (default),
 `:input` (debounced 300ms, for live search), `:change` (selects,
-checkboxes), or `:submit` (a whole `<form>`; all fields become params).
+checkboxes), `:submit` (a whole `<form>`; all fields become params), or `:drop`.
 Inputs send their `name` (or `"value"`) automatically.
+
+## Drag and drop
+
+Use `drag_card/1` to make a card draggable and `fx(..., on: :drop)` on a
+column or card to receive it. The runtime sends the dragged card's id as
+`"card_id"`; keep board state in `values:` and return the full board region.
+Dropping on a card can carry its id as `before_card_id` to place the dragged
+card before it, while dropping on a column appends it.
 
 ## Keyboard shortcuts and browser actions
 

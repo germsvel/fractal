@@ -29,9 +29,22 @@ defmodule Fractal.InteractiveTest do
       assert_raise ArgumentError, ~r/:target/, fn -> fx("go") end
     end
 
+    test "supports drop targets" do
+      html = render(HTML.tag(:div, fx("move-card", target: "#board", on: :drop)))
+
+      assert html =~ ~s(data-fx-on="drop")
+    end
+
     test "rejects unknown trigger kinds" do
       assert_raise ArgumentError, ~r/:on must be/, fn -> fx("go", target: "#x", on: :hover) end
     end
+  end
+
+  test "drag_card/1 marks a card as draggable" do
+    html = render(HTML.tag(:li, drag_card("card-1")))
+
+    assert html =~ "draggable"
+    assert html =~ ~s(data-fx-drag-card="card-1")
   end
 
   describe "trigger/3" do
@@ -53,6 +66,8 @@ defmodule Fractal.InteractiveTest do
     assert js =~ "_fx_path"
     assert js =~ "_fx_event"
     assert js =~ "fx-redirect"
+    assert js =~ "dragstart"
+    assert js =~ "card_id"
   end
 
   test "runtime_js sends the CSRF token from the layout's meta tag" do
